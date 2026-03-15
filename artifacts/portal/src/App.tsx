@@ -16,7 +16,6 @@ import ReviewForm from "./pages/reviews/[id]";
 import { useAuth } from "./hooks/use-auth";
 import { LoadingSpinner } from "./components/ui/shared";
 
-// Setup global fetch interceptor to inject Bearer token automatically for Orval
 const originalFetch = window.fetch;
 window.fetch = async (input, init) => {
   let url = input.toString();
@@ -89,9 +88,12 @@ function Router() {
     <Switch>
       <Route path="/" component={DefaultRedirect} />
       <Route path="/login" component={Login} />
-      
+
       {/* Author Routes */}
       <Route path="/dashboard/author">
+        {() => <ProtectedRoute component={AuthorDashboard} allowedRoles={['author']} />}
+      </Route>
+      <Route path="/dashboard/author/:tab">
         {() => <ProtectedRoute component={AuthorDashboard} allowedRoles={['author']} />}
       </Route>
       <Route path="/submissions/new">
@@ -102,20 +104,29 @@ function Router() {
       <Route path="/dashboard/editor">
         {() => <ProtectedRoute component={EditorDashboard} allowedRoles={['editor', 'admin']} />}
       </Route>
+      <Route path="/dashboard/editor/:tab">
+        {() => <ProtectedRoute component={EditorDashboard} allowedRoles={['editor', 'admin']} />}
+      </Route>
 
       {/* Reviewer Routes */}
       <Route path="/dashboard/reviewer">
+        {() => <ProtectedRoute component={ReviewerDashboard} allowedRoles={['reviewer']} />}
+      </Route>
+      <Route path="/dashboard/reviewer/:tab">
         {() => <ProtectedRoute component={ReviewerDashboard} allowedRoles={['reviewer']} />}
       </Route>
       <Route path="/reviews/:id">
         {() => <ProtectedRoute component={ReviewForm} allowedRoles={['reviewer', 'editor', 'admin']} />}
       </Route>
 
-      {/* Admin Routes */}
+      {/* Admin Routes — each sub-path maps to AdminDashboard, which reads the URL */}
       <Route path="/dashboard/admin">
         {() => <ProtectedRoute component={AdminDashboard} allowedRoles={['admin']} />}
       </Route>
-      
+      <Route path="/dashboard/admin/:section">
+        {() => <ProtectedRoute component={AdminDashboard} allowedRoles={['admin']} />}
+      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );
