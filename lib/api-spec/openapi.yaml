@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 1.0.0
+  description: Academic Publishing Portal API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: submissions
+    description: Manuscript submissions
+  - name: reviews
+    description: Expert reviews
+  - name: users
+    description: User management
+  - name: departments
+    description: Department management
+  - name: admin
+    description: Admin operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,363 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /departments:
+    get:
+      operationId: getDepartments
+      tags: [departments]
+      summary: List departments
+      responses:
+        "200":
+          description: List of departments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Department"
+
+  /submissions:
+    get:
+      operationId: getSubmissions
+      tags: [submissions]
+      summary: List submissions (filtered by role)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of submissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionListResponse"
+    post:
+      operationId: createSubmission
+      tags: [submissions]
+      summary: Create a new submission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubmissionRequest"
+      responses:
+        "201":
+          description: Submission created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+
+  /submissions/{id}:
+    get:
+      operationId: getSubmission
+      tags: [submissions]
+      summary: Get submission details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Submission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/{id}/status:
+    patch:
+      operationId: updateSubmissionStatus
+      tags: [submissions]
+      summary: Update submission status (editor/admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStatusRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+
+  /submissions/{id}/assign:
+    post:
+      operationId: assignReviewer
+      tags: [submissions]
+      summary: Assign a reviewer to a submission (editor/admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignReviewerRequest"
+      responses:
+        "200":
+          description: Reviewer assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  /submissions/{id}/upload:
+    post:
+      operationId: uploadDocument
+      tags: [submissions]
+      summary: Upload document for submission
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                docType:
+                  type: string
+      responses:
+        "200":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /reviews:
+    get:
+      operationId: getReviews
+      tags: [reviews]
+      summary: List reviews for current reviewer
+      responses:
+        "200":
+          description: List of reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+
+  /reviews/{id}:
+    get:
+      operationId: getReview
+      tags: [reviews]
+      summary: Get review details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+    patch:
+      operationId: submitReview
+      tags: [reviews]
+      summary: Submit expert review
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitReviewRequest"
+      responses:
+        "200":
+          description: Review submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  /users:
+    get:
+      operationId: getUsers
+      tags: [users]
+      summary: List users (admin only)
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/{id}/role:
+    patch:
+      operationId: updateUserRole
+      tags: [users]
+      summary: Update user role (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoleRequest"
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get admin statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +398,333 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    RegisterRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        password:
+          type: string
+        departmentId:
+          type: integer
+        scientificDegree:
+          type: string
+          enum: [PhD, DSc, none]
+        position:
+          type: string
+          enum: [teacher, senior_teacher, associate_professor, professor]
+      required: [fullName, email, password, departmentId, scientificDegree, position]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required: [email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [user, token]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [author, editor, reviewer, admin]
+        departmentId:
+          type: integer
+        departmentName:
+          type: string
+        scientificDegree:
+          type: string
+        position:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, fullName, email, role]
+
+    Department:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name]
+
+    Submission:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        abstract:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        language:
+          type: string
+        departmentId:
+          type: integer
+        departmentName:
+          type: string
+        scientificDirection:
+          type: string
+        literatureType:
+          type: string
+          enum: [darslik, oquv_qollanma, monografiya, oquv_uslubiy_qollanma, uslubiy_korsatma]
+        status:
+          type: string
+          enum: [submitted, under_review, revision_required, accepted, rejected, published]
+        authorId:
+          type: integer
+        authorName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, title, literatureType, status, authorId, createdAt]
+
+    SubmissionDetail:
+      allOf:
+        - $ref: "#/components/schemas/Submission"
+        - type: object
+          properties:
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/Document"
+            reviews:
+              type: array
+              items:
+                $ref: "#/components/schemas/Review"
+            editorNotes:
+              type: string
+
+    SubmissionListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Submission"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [items, total]
+
+    CreateSubmissionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        abstract:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        language:
+          type: string
+        departmentId:
+          type: integer
+        scientificDirection:
+          type: string
+        literatureType:
+          type: string
+          enum: [darslik, oquv_qollanma, monografiya, oquv_uslubiy_qollanma, uslubiy_korsatma]
+      required: [title, abstract, departmentId, scientificDirection, literatureType]
+
+    UpdateStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [submitted, under_review, revision_required, accepted, rejected, published]
+        notes:
+          type: string
+      required: [status]
+
+    AssignReviewerRequest:
+      type: object
+      properties:
+        reviewerId:
+          type: integer
+      required: [reviewerId]
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+        submissionId:
+          type: integer
+        docType:
+          type: string
+          enum: [internal_review, external_review, plagiarism_report, curriculum, syllabus, main_document]
+        fileName:
+          type: string
+        fileSize:
+          type: integer
+        filePath:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+      required: [id, submissionId, docType, fileName]
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: integer
+        submissionId:
+          type: integer
+        submissionTitle:
+          type: string
+        reviewerId:
+          type: integer
+        reviewerName:
+          type: string
+        scientificSignificance:
+          type: integer
+          minimum: 1
+          maximum: 10
+        methodology:
+          type: integer
+          minimum: 1
+          maximum: 10
+        structureClarity:
+          type: integer
+          minimum: 1
+          maximum: 10
+        originality:
+          type: integer
+          minimum: 1
+          maximum: 10
+        commentsForAuthor:
+          type: string
+        commentsForEditor:
+          type: string
+        verdict:
+          type: string
+          enum: [accept, minor_revision, major_revision, reject]
+        status:
+          type: string
+          enum: [pending, submitted]
+        assignedAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+      required: [id, submissionId, reviewerId, status]
+
+    SubmitReviewRequest:
+      type: object
+      properties:
+        scientificSignificance:
+          type: integer
+          minimum: 1
+          maximum: 10
+        methodology:
+          type: integer
+          minimum: 1
+          maximum: 10
+        structureClarity:
+          type: integer
+          minimum: 1
+          maximum: 10
+        originality:
+          type: integer
+          minimum: 1
+          maximum: 10
+        commentsForAuthor:
+          type: string
+        commentsForEditor:
+          type: string
+        verdict:
+          type: string
+          enum: [accept, minor_revision, major_revision, reject]
+      required: [scientificSignificance, methodology, structureClarity, originality, verdict]
+
+    UpdateRoleRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [author, editor, reviewer, admin]
+      required: [role]
+
+    AdminStats:
+      type: object
+      properties:
+        totalSubmissions:
+          type: integer
+        pendingReview:
+          type: integer
+        underReview:
+          type: integer
+        accepted:
+          type: integer
+        rejected:
+          type: integer
+        published:
+          type: integer
+        totalUsers:
+          type: integer
+        totalReviewers:
+          type: integer
+      required: [totalSubmissions, pendingReview, underReview, accepted, rejected, published, totalUsers, totalReviewers]

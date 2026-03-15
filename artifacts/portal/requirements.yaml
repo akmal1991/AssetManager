@@ -1,0 +1,24 @@
+packages:
+  "framer-motion": "Smooth page transitions, wizard step animations, and interactive component feedback"
+  "recharts": "Visualizing statistics on the admin dashboard (submissions, user growth)"
+  "date-fns": "Formatting publication dates, submission timestamps, and deadlines in human-readable localized formats"
+  "clsx": "Utility for conditionally joining class names"
+  "tailwind-merge": "Utility for resolving Tailwind CSS class conflicts"
+  "@hookform/resolvers": "Zod validation resolver for robust form handling"
+  "react-hook-form": "Managing complex multi-step wizard state and large submission forms"
+
+images:
+  - path: "artifacts/portal/public/images/logo.png"
+    description: "A prestigious, minimalist university academic seal or logo mark in deep navy blue and gold on a transparent background, featuring subtle elements of a book, column, or laurel wreath."
+    aspect_ratio: "1:1"
+  - path: "artifacts/portal/public/images/auth-bg.png"
+    description: "A stunning, highly stylized abstract architectural rendering of a modern university library interior or columned hallway. Deep navy blues, slate, and warm golden lighting. Professional, academic, cinematic depth."
+    aspect_ratio: "16:9"
+  - path: "artifacts/portal/public/images/pattern-overlay.png"
+    description: "A seamless, subtle geometric repeating pattern inspired by traditional Uzbek motifs and academic tessellations. Very low contrast, elegant, dark blue monotone for use as a background texture."
+    aspect_ratio: "16:9"
+
+notes:
+  - Intercepting window.fetch in App.tsx to automatically inject the Bearer token into all requests to /api, seamlessly supporting the generated Orval hooks.
+  - Using a Multi-step wizard approach for the New Submission form to improve UX.
+  - Assuming English/Uzbek labels are hardcoded via conditional rendering or fixed text based on UI requirements.

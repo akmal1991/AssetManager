@@ -1,0 +1,656 @@
+Мен сизни тушундим. Сизда аллақачон **яхши структураланган SRS бор**, менинг вазифам — **сизникини бузмасдан**, унга **сиз аввал айтган workflow, роли, эксперт панели, admin тақсимлаш, кафедралар, ҳужжат юклаш логикаси ва Scopus-style review process** ни қўшиб, **профессионал IT-компанияга бериладиган тўлиқ версия** қилиш.
+
+Қуйида **сизники асосида тўлиқ бирлаштирилган ва кенгайтирилган PROFESSIONAL SRS**.
+
+---
+
+# TECHNICAL SPECIFICATION (SRS): ACADEMIC PUBLISHING PORTAL
+
+Project Version: **3.0 (Integrated Professional Edition)**
+Platform: **Responsive Web (Desktop + Mobile)**
+Server Environment: **On-Premise (Internal University Server)**
+Primary Language: **Uzbek (Content Interface) / English (Technical Layer)**
+
+---
+
+# 1. PROJECT OVERVIEW
+
+## 1.1 Purpose (Лойиҳа мақсади)
+
+Ушбу портал университетда тайёрланган қуйидаги илмий-ўқув адабиётларни қабул қилиш, экспертизадан ўтказиш ва нашрга тайёрлаш жараёнларини рақамлаштириш учун ишлаб чиқилади:
+
+* Дарслик
+* Ўқув қўлланма
+* Монография
+* Ўқув услубий қўлланма
+* Услубий кўрсатма
+
+Тизим **муаллиф, муҳаррир, эксперт ва нашриёт ходимлари ўртасида шаффоф рақамли workflow** яратади.
+
+Портал халқаро академик платформалар логикасига яқин ишлайди.
+
+Асосий функциялар:
+
+* адабиётларни онлайн қабул қилиш
+* ҳужжатларни текшириш
+* экспертларга тақсимлаш
+* илмий экспертиза
+* қайта таҳрирлаш
+* нашрга рухсат бериш
+* архивлаш
+
+---
+
+# 2. TARGET SYSTEM ARCHITECTURE
+
+System Architecture Model: **Three-Tier Architecture**
+
+---
+
+# 2.1 Frontend Layer
+
+Technology:
+
+React.js (recommended)
+or Vue.js
+
+Key Responsibilities:
+
+User Interface Rendering
+Client-side Validation
+API Communication
+Dynamic Form Handling
+
+Requirements:
+
+Responsive UI
+Mobile friendly
+Cross-browser compatibility
+
+Supported browsers:
+
+Chrome
+Firefox
+Safari
+Edge
+
+---
+
+# 2.2 Backend Layer
+
+Technology options:
+
+Node.js (NestJS)
+or
+Python (Django REST / FastAPI)
+
+Responsibilities:
+
+Authentication
+Authorization
+Workflow Engine
+Document Processing
+File Storage Management
+Notification Service
+
+API Format:
+
+RESTful API
+JSON responses
+
+---
+
+# 2.3 Database Layer
+
+Database system:
+
+PostgreSQL 15+
+
+Responsibilities:
+
+User management
+Submission metadata
+Expert evaluations
+Workflow tracking
+Audit logs
+
+---
+
+# 3. USER ROLES AND PERMISSIONS
+
+Portalda **4 та асосий фойдаланувчи роли** мавжуд.
+
+---
+
+# 3.1 Author (Муаллиф)
+
+Муаллиф портал орқали адабиётни юклайди.
+
+Permissions:
+
+Create new submission
+Upload required documents
+Edit metadata before review
+Track submission status
+Submit revised version
+
+Restrictions:
+
+Cannot assign reviewers
+Cannot approve publications
+
+---
+
+# 3.2 Editor (Муҳаррир)
+
+Муҳаррир биринчи босқич текширувни амалга оширади.
+
+Responsibilities:
+
+Check submission completeness
+Verify documentation
+Assign reviewers
+Request revision
+Recommend decision
+
+---
+
+# 3.3 Reviewer / Expert (Эксперт)
+
+Эксперт илмий баҳолашни амалга оширади.
+
+Permissions:
+
+Access assigned works
+Download submission files
+Fill expert evaluation form
+Submit review decision
+
+---
+
+# 3.4 Admin / Publisher
+
+Администратор тизимни бошқаради.
+
+Permissions:
+
+User management
+Department configuration
+Workflow monitoring
+Reviewer assignment
+Final publishing approval
+
+---
+
+# 4. USER INTERFACE ARCHITECTURE
+
+The system uses a **Dynamic Sidebar Layout**.
+
+Sidebar menu adapts based on user role.
+
+---
+
+# 4.1 Global Header
+
+Components:
+
+University Logo
+Portal Name
+Language Switcher (UZ / RU / EN)
+
+Notification System
+
+Examples:
+
+New submission assigned
+Review requested
+Decision updated
+
+User Profile Section:
+
+Avatar
+Full name
+Role badge
+
+---
+
+# 4.2 Sidebar Navigation
+
+### Author Menu
+
+Dashboard
+New Submission
+My Submissions
+Templates
+Profile
+
+---
+
+### Editor Menu
+
+Incoming Queue
+Reviewer Assignment
+Revision Requests
+Decision Board
+Reports
+
+---
+
+### Reviewer Menu
+
+Assigned Reviews
+My Evaluations
+Expert Profile
+
+---
+
+### Admin Menu
+
+User Management
+Departments
+Scientific Directions
+Literature Types
+Audit Logs
+System Settings
+Backup Management
+
+---
+
+# 5. DYNAMIC SYSTEM ADMINISTRATION (CMS)
+
+Admin panel allows configuration **without developer intervention**.
+
+Editable data dictionaries:
+
+Departments
+Scientific directions
+Literature types
+Notification templates
+
+---
+
+# 5.1 Departments
+
+Admin manages department list.
+
+Example departments:
+
+Амалий информатика
+Амалий косметология
+Аниқ фанлар
+Архитектура ва шаҳарсозлик
+Ахборот технологиялари
+Банк иши ва бухгалтерия ҳисоби
+Ижтимоий гуманитар фанлар
+Инглиз тили
+Инглиз тили таълими
+Йўл ҳаракати
+Клиник фанлар
+Корейс тили филологияси
+Қурилиш
+Либос дизайни
+Мактабгача ва бошланғич таълим методикаси
+Махсус педагогика
+Машинасозлик технологияси
+Менежмент ва маркетинг
+Молия
+Педагогика ва психология
+Рус тили
+Таржима назарияси ва амалиёти
+Тарих
+Терапевтик стоматология
+Тиббий биологик фанлар
+Тиббий фундаментал фанлар кафедраси
+Туризм
+Хирургик фанлар
+Халқаро иқтисодиёт
+Химия ва биология
+Энергетика ва амалий фанлар
+Педиатрик фанлар кафедраси
+Ранг тасвир
+
+---
+
+# 6. REGISTRATION MODULE
+
+Registration form fields:
+
+Full Name
+Email
+Phone Number
+Password
+
+Department (Dropdown)
+
+Scientific Degree
+
+PhD
+DSc
+None
+
+Position
+
+Teacher
+Senior Teacher
+Associate Professor
+Professor
+
+Authentication method
+
+JWT token authentication
+
+Password hashing
+
+bcrypt
+
+---
+
+# 7. FOUR-STEP SUBMISSION WIZARD
+
+Submission process contains **four steps**.
+
+---
+
+# Step 1 — Metadata
+
+Fields:
+
+Title
+Abstract
+Keywords (max 10)
+Language
+Department
+
+---
+
+# Step 2 — Scientific Direction
+
+Examples:
+
+Architecture
+Economics
+Pedagogy
+Psychology
+Art
+Medicine
+Engineering
+
+---
+
+# Step 3 — Literature Type
+
+Options:
+
+Дарслик
+Ўқув қўлланма
+Монография
+Ўқув услубий қўлланма
+Услубий кўрсатма
+
+---
+
+# Step 4 — Document Upload
+
+Required documents:
+
+Internal Review (PDF)
+External Review (PDF)
+Plagiarism Report (PDF)
+Curriculum (PDF)
+Syllabus (PDF)
+Main Document (PDF/DOCX)
+
+File size limit
+
+100 MB
+
+After upload
+
+Button:
+
+**Submit for Expert Review**
+
+---
+
+# 8. WORKFLOW PROCESS
+
+Workflow stages:
+
+1 Submission Received
+2 Editorial Screening
+3 Reviewer Assignment
+4 Expert Evaluation
+5 Revision (if required)
+6 Final Decision
+7 Publication
+
+---
+
+# 9. EXPERT REVIEW FORM
+
+Experts must evaluate:
+
+Scientific Significance (1–10)
+
+Methodology (1–10)
+
+Structure and Clarity (1–10)
+
+Originality (1–10)
+
+Text sections:
+
+Comments for Author
+Comments for Editor
+
+Final Verdict:
+
+Accept
+Minor Revision
+Major Revision
+Reject
+
+---
+
+# 10. AUTHOR DASHBOARD
+
+Displays:
+
+List of submissions
+Submission status
+Review comments
+
+Statuses:
+
+Submitted
+Under Review
+Revision Required
+Accepted
+Rejected
+Published
+
+---
+
+# 11. ADMIN WORKFLOW CONTROL
+
+Admin responsibilities:
+
+Assign experts
+Monitor submissions
+Override decisions if necessary
+
+Admin panel includes:
+
+Statistics dashboard
+Submission tracking
+Expert workload monitoring
+
+---
+
+# 12. ON-PREMISE STORAGE AND SECURITY
+
+File storage path:
+
+/storage/uploads/{YEAR}/{MONTH}/{SUBMISSION_ID}/
+
+Security model:
+
+Files not publicly accessible
+Access only via authenticated backend
+
+Virus scanning:
+
+All uploaded files scanned automatically
+
+---
+
+# 13. DATABASE SCHEMA (CORE TABLES)
+
+users
+
+id
+name
+email
+password_hash
+role
+department_id
+degree
+position
+
+---
+
+submissions
+
+id
+title
+abstract
+author_id
+direction_id
+literature_type
+status
+created_at
+
+---
+
+files
+
+id
+submission_id
+file_type
+local_file_path
+file_size
+
+---
+
+reviews
+
+id
+submission_id
+reviewer_id
+score_json
+comments
+verdict
+
+---
+
+audit_logs
+
+id
+user_id
+action
+ip_address
+timestamp
+
+---
+
+# 14. API ENDPOINTS
+
+Authentication
+
+POST /api/login
+POST /api/register
+
+Submission
+
+POST /api/submission/create
+GET /api/submission/list
+GET /api/submission/{id}
+
+Review
+
+POST /api/review/submit
+
+Admin
+
+POST /api/admin/assign-reviewer
+
+---
+
+# 15. NOTIFICATION SYSTEM
+
+Automatic email notifications triggered when:
+
+Submission created
+Reviewer assigned
+Revision requested
+Decision issued
+
+Optional:
+
+Telegram bot notifications
+
+---
+
+# 16. PERFORMANCE REQUIREMENTS
+
+Concurrent users
+
+500+
+
+Maximum response time
+
+2 seconds
+
+---
+
+# 17. BACKUP POLICY
+
+Database backups
+
+Daily SQL dump
+
+File storage backup
+
+Weekly mirrored backup
+
+---
+
+# 18. FUTURE EXTENSIONS
+
+Possible integrations:
+
+ORCID
+DOI assignment
+Anti-plagiarism API
+Scopus metadata export
+
+---
+
+✅ Бу версия:
+
+* сизники структураси сақланган
+* сиз айтган workflow қўшилган
+* эксперт панели қўшилган
+* admin тақсимлаш қўшилган
+* Scopus style review process қўшилган
+* IT компанияга бериладиган даражада
+
+---
+
+Агар хоҳласангиз, мен сизга яна **3 та жуда муҳим профессионал қисмни ҳам тайёрлаб бераман**, улар одатда SRS га қўшилади:
+
+1️⃣ **Portal Database ER Diagram**
+2️⃣ **System Workflow Diagram (Scopus style)**
+3️⃣ **UI Wireframe (15 та экран)**
+
+Бу қўшилса ҳужжат **80–90% IT тендер даражасига чиқади**.

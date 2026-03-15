@@ -1,0 +1,227 @@
+import { Router } from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { db } from "@workspace/db";
+import { submissionsTable, documentsTable, reviewsTable, usersTable, departmentsTable } from "@workspace/db/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { requireAuth, requireRole } from "../lib/auth.js";
+
+const router = Router();
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "/tmp/uploads";
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const subId = req.params.id;
+    const now = new Date();
+    const dir = path.join(UPLOAD_DIR, String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, "0"), subId);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, unique + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
+
+async function getSubmissionWithDetails(id: number) {
+  const subs = await db
+    .select({
+      submission: submissionsTable,
+      authorName: usersTable.fullName,
+      deptName: departmentsTable.name,
+    })
+    .from(submissionsTable)
+    .leftJoin(usersTable, eq(submissionsTable.authorId, usersTable.id))
+    .leftJoin(departmentsTable, eq(submissionsTable.departmentId, departmentsTable.id))
+    .where(eq(submissionsTable.id, id))
+    .limit(1);
+  return subs[0];
+}
+
+function formatSub(row: any) {
+  return {
+    ...row.submission,
+    authorName: row.authorName,
+    departmentName: row.deptName,
+  };
+}
+
+router.get("/", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const page = Math.max(1, parseInt(String(req.query.page ?? 1)));
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? 20))));
+    const offset = (page - 1) * limit;
+    const statusFilter = req.query.status as string | undefined;
+
+    let query = db
+      .select({
+        submission: submissionsTable,
+        authorName: usersTable.fullName,
+        deptName: departmentsTable.name,
+      })
+      .from(submissionsTable)
+      .leftJoin(usersTable, eq(submissionsTable.authorId, usersTable.id))
+      .leftJoin(departmentsTable, eq(submissionsTable.departmentId, departmentsTable.id));
+
+    const conditions: any[] = [];
+    if (user.role === "author") {
+      conditions.push(eq(submissionsTable.authorId, user.id));
+    }
+    if (statusFilter) {
+      conditions.push(eq(submissionsTable.status, statusFilter as any));
+    }
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions) as any) as any;
+    }
+
+    const items = await (query as any).limit(limit).offset(offset);
+    const countResult = await db.select({ count: sql<number>`count(*)` }).from(submissionsTable);
+    const total = Number(countResult[0]?.count ?? 0);
+
+    res.json({
+      items: items.map(formatSub),
+      total,
+      page,
+      limit,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { title, abstract, keywords, language, departmentId, scientificDirection, literatureType } = req.body;
+    if (!title || !abstract || !scientificDirection || !literatureType) {
+      res.status(400).json({ error: "title, abstract, scientificDirection, literatureType required" });
+      return;
+    }
+    const inserted = await db.insert(submissionsTable).values({
+      title,
+      abstract,
+      keywords: Array.isArray(keywords) ? keywords : [],
+      language: language ?? "uz",
+      departmentId: departmentId ? Number(departmentId) : null,
+      scientificDirection,
+      literatureType,
+      status: "submitted",
+      authorId: user.id,
+    }).returning();
+    const sub = inserted[0];
+    const row = await getSubmissionWithDetails(sub.id);
+    res.status(201).json(formatSub(row));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const row = await getSubmissionWithDetails(id);
+    if (!row) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const docs = await db.select().from(documentsTable).where(eq(documentsTable.submissionId, id));
+    const reviews = await db
+      .select({ review: reviewsTable, reviewerName: usersTable.fullName })
+      .from(reviewsTable)
+      .leftJoin(usersTable, eq(reviewsTable.reviewerId, usersTable.id))
+      .where(eq(reviewsTable.submissionId, id));
+
+    res.json({
+      ...formatSub(row),
+      documents: docs,
+      reviews: reviews.map(r => ({ ...r.review, reviewerName: r.reviewerName })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/:id/status", requireAuth, requireRole("editor", "admin"), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status, notes } = req.body;
+    await db.update(submissionsTable)
+      .set({ status, editorNotes: notes ?? null, updatedAt: new Date() })
+      .where(eq(submissionsTable.id, id));
+    const row = await getSubmissionWithDetails(id);
+    res.json(formatSub(row));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/:id/assign", requireAuth, requireRole("editor", "admin"), async (req, res) => {
+  try {
+    const submissionId = parseInt(req.params.id);
+    const { reviewerId } = req.body;
+    if (!reviewerId) {
+      res.status(400).json({ error: "reviewerId required" });
+      return;
+    }
+    const existing = await db.select().from(reviewsTable)
+      .where(and(eq(reviewsTable.submissionId, submissionId), eq(reviewsTable.reviewerId, reviewerId)))
+      .limit(1);
+    if (existing[0]) {
+      res.json(existing[0]);
+      return;
+    }
+    const inserted = await db.insert(reviewsTable).values({
+      submissionId,
+      reviewerId: Number(reviewerId),
+      status: "pending",
+    }).returning();
+    await db.update(submissionsTable).set({ status: "under_review", updatedAt: new Date() }).where(eq(submissionsTable.id, submissionId));
+    res.json(inserted[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: "No file uploaded" });
+      return;
+    }
+    const submissionId = parseInt(req.params.id);
+    const { docType } = req.body;
+    if (!docType) {
+      res.status(400).json({ error: "docType required" });
+      return;
+    }
+    const existing = await db.select().from(documentsTable)
+      .where(and(eq(documentsTable.submissionId, submissionId), eq(documentsTable.docType, docType)))
+      .limit(1);
+    if (existing[0]) {
+      await db.update(documentsTable)
+        .set({ fileName: req.file.originalname, fileSize: req.file.size, filePath: req.file.path })
+        .where(eq(documentsTable.id, existing[0].id));
+      const updated = await db.select().from(documentsTable).where(eq(documentsTable.id, existing[0].id)).limit(1);
+      res.json(updated[0]);
+      return;
+    }
+    const inserted = await db.insert(documentsTable).values({
+      submissionId,
+      docType: docType as any,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      filePath: req.file.path,
+    }).returning();
+    res.json(inserted[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
