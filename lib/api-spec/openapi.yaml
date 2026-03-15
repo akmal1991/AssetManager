@@ -131,6 +131,93 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Department"
+    post:
+      operationId: createDepartment
+      tags: [departments]
+      summary: Create department (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDepartmentRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+
+  /departments/{id}:
+    delete:
+      operationId: deleteDepartment
+      tags: [departments]
+      summary: Delete department (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /scientific-directions:
+    get:
+      operationId: getScientificDirections
+      tags: [departments]
+      summary: List scientific directions
+      responses:
+        "200":
+          description: List of directions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScientificDirection"
+    post:
+      operationId: createScientificDirection
+      tags: [departments]
+      summary: Create scientific direction (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDirectionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScientificDirection"
+
+  /scientific-directions/{id}:
+    delete:
+      operationId: deleteScientificDirection
+      tags: [departments]
+      summary: Delete scientific direction (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
 
   /submissions:
     get:
@@ -494,6 +581,32 @@ components:
           type: string
           format: date-time
       required: [id, name]
+
+    CreateDepartmentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+
+    ScientificDirection:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name]
+
+    CreateDirectionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
 
     Submission:
       type: object

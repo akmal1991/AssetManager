@@ -20,6 +20,8 @@ import type {
   AdminStats,
   AssignReviewerRequest,
   AuthResponse,
+  CreateDepartmentRequest,
+  CreateDirectionRequest,
   CreateSubmissionRequest,
   Department,
   Document,
@@ -30,6 +32,7 @@ import type {
   MessageResponse,
   RegisterRequest,
   Review,
+  ScientificDirection,
   Submission,
   SubmissionDetail,
   SubmissionListResponse,
@@ -514,6 +517,423 @@ export function useGetDepartments<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Create department (admin only)
+ */
+export const getCreateDepartmentUrl = () => {
+  return `/api/departments`;
+};
+
+export const createDepartment = async (
+  createDepartmentRequest: CreateDepartmentRequest,
+  options?: RequestInit,
+): Promise<Department> => {
+  return customFetch<Department>(getCreateDepartmentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDepartmentRequest),
+  });
+};
+
+export const getCreateDepartmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDepartment>>,
+    TError,
+    { data: BodyType<CreateDepartmentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDepartment>>,
+  TError,
+  { data: BodyType<CreateDepartmentRequest> },
+  TContext
+> => {
+  const mutationKey = ["createDepartment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDepartment>>,
+    { data: BodyType<CreateDepartmentRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDepartment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDepartmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDepartment>>
+>;
+export type CreateDepartmentMutationBody = BodyType<CreateDepartmentRequest>;
+export type CreateDepartmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create department (admin only)
+ */
+export const useCreateDepartment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDepartment>>,
+    TError,
+    { data: BodyType<CreateDepartmentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDepartment>>,
+  TError,
+  { data: BodyType<CreateDepartmentRequest> },
+  TContext
+> => {
+  return useMutation(getCreateDepartmentMutationOptions(options));
+};
+
+/**
+ * @summary Delete department (admin only)
+ */
+export const getDeleteDepartmentUrl = (id: number) => {
+  return `/api/departments/${id}`;
+};
+
+export const deleteDepartment = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getDeleteDepartmentUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDepartmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDepartment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDepartment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteDepartment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDepartment>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDepartment(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDepartmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDepartment>>
+>;
+
+export type DeleteDepartmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete department (admin only)
+ */
+export const useDeleteDepartment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDepartment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDepartment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteDepartmentMutationOptions(options));
+};
+
+/**
+ * @summary List scientific directions
+ */
+export const getGetScientificDirectionsUrl = () => {
+  return `/api/scientific-directions`;
+};
+
+export const getScientificDirections = async (
+  options?: RequestInit,
+): Promise<ScientificDirection[]> => {
+  return customFetch<ScientificDirection[]>(getGetScientificDirectionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetScientificDirectionsQueryKey = () => {
+  return [`/api/scientific-directions`] as const;
+};
+
+export const getGetScientificDirectionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getScientificDirections>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getScientificDirections>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetScientificDirectionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getScientificDirections>>
+  > = ({ signal }) => getScientificDirections({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getScientificDirections>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetScientificDirectionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getScientificDirections>>
+>;
+export type GetScientificDirectionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List scientific directions
+ */
+
+export function useGetScientificDirections<
+  TData = Awaited<ReturnType<typeof getScientificDirections>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getScientificDirections>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetScientificDirectionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create scientific direction (admin only)
+ */
+export const getCreateScientificDirectionUrl = () => {
+  return `/api/scientific-directions`;
+};
+
+export const createScientificDirection = async (
+  createDirectionRequest: CreateDirectionRequest,
+  options?: RequestInit,
+): Promise<ScientificDirection> => {
+  return customFetch<ScientificDirection>(getCreateScientificDirectionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDirectionRequest),
+  });
+};
+
+export const getCreateScientificDirectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createScientificDirection>>,
+    TError,
+    { data: BodyType<CreateDirectionRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createScientificDirection>>,
+  TError,
+  { data: BodyType<CreateDirectionRequest> },
+  TContext
+> => {
+  const mutationKey = ["createScientificDirection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createScientificDirection>>,
+    { data: BodyType<CreateDirectionRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createScientificDirection(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateScientificDirectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createScientificDirection>>
+>;
+export type CreateScientificDirectionMutationBody =
+  BodyType<CreateDirectionRequest>;
+export type CreateScientificDirectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create scientific direction (admin only)
+ */
+export const useCreateScientificDirection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createScientificDirection>>,
+    TError,
+    { data: BodyType<CreateDirectionRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createScientificDirection>>,
+  TError,
+  { data: BodyType<CreateDirectionRequest> },
+  TContext
+> => {
+  return useMutation(getCreateScientificDirectionMutationOptions(options));
+};
+
+/**
+ * @summary Delete scientific direction (admin only)
+ */
+export const getDeleteScientificDirectionUrl = (id: number) => {
+  return `/api/scientific-directions/${id}`;
+};
+
+export const deleteScientificDirection = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getDeleteScientificDirectionUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteScientificDirectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteScientificDirection>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteScientificDirection>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteScientificDirection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteScientificDirection>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteScientificDirection(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteScientificDirectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteScientificDirection>>
+>;
+
+export type DeleteScientificDirectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete scientific direction (admin only)
+ */
+export const useDeleteScientificDirection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteScientificDirection>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteScientificDirection>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteScientificDirectionMutationOptions(options));
+};
 
 /**
  * @summary List submissions (filtered by role)

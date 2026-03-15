@@ -1,16 +1,10 @@
 import React, { useState } from "react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
-import { useCreateSubmission, useUploadDocument, useUpdateSubmissionStatus, useGetDepartments } from "@workspace/api-client-react";
+import { useCreateSubmission, useUploadDocument, useUpdateSubmissionStatus, useGetDepartments, useGetScientificDirections } from "@workspace/api-client-react";
 import { Button, Card, Input, Select, Textarea, PageTransition } from "@/components/ui/shared";
 import { UploadCloud, CheckCircle, ArrowRight, ArrowLeft, FileType, Check } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-
-const SCIENTIFIC_DIRECTIONS = [
-  "Arxitektura", "Iqtisodiyot", "Pedagogika", "Psixologiya", "San'at", 
-  "Tibbiyot", "Muhandislik", "Huquq", "Tarix", "Filologiya", 
-  "Kimyo va biologiya", "Fizika va matematika", "Axborot texnologiyalari"
-];
 
 const REQUIRED_DOCS = [
   { type: "main_document", label: "Asosiy hujjat (Qo'lyozma)" },
@@ -28,6 +22,9 @@ export default function NewSubmissionWizard() {
   const { toast } = useToast();
   
   const { data: departments } = useGetDepartments();
+  const { data: directionsData } = useGetScientificDirections();
+  const SCIENTIFIC_DIRECTIONS = directionsData?.map(d => d.name) || [];
+
   const createMutation = useCreateSubmission();
   const uploadMutation = useUploadDocument();
   const updateStatusMutation = useUpdateSubmissionStatus();
@@ -123,13 +120,13 @@ export default function NewSubmissionWizard() {
       <PageTransition>
         <div className="max-w-4xl mx-auto py-8">
           <div className="mb-10">
-            <h2 className="text-3xl font-serif font-bold text-foreground">Yangi ilmiy ish yuborish</h2>
+            <h2 className="text-3xl font-serif font-bold text-primary">Yangi ilmiy ish yuborish</h2>
             <p className="text-muted-foreground mt-2">To'liq ma'lumotlarni kiriting va hujjatlarni biriktiring.</p>
           </div>
 
           {/* Stepper Indicator */}
           <div className="flex items-center justify-between mb-12 relative">
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-muted -z-10 rounded-full">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 -z-10 rounded-full">
               <div 
                 className="h-full bg-primary transition-all duration-500 rounded-full" 
                 style={{ width: `${((step - 1) / 3) * 100}%` }}
@@ -138,10 +135,10 @@ export default function NewSubmissionWizard() {
             {[1, 2, 3, 4].map((s) => (
               <div 
                 key={s} 
-                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border-4 shadow-sm transition-all duration-300 ${
-                  s < step ? "bg-primary border-primary text-primary-foreground" : 
-                  s === step ? "bg-background border-primary text-primary" : 
-                  "bg-background border-muted text-muted-foreground"
+                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border-4 shadow-sm transition-all duration-300 bg-white ${
+                  s < step ? "border-primary text-primary" : 
+                  s === step ? "border-primary bg-primary text-white" : 
+                  "border-slate-200 text-slate-400"
                 }`}
               >
                 {s < step ? <Check className="h-6 w-6" /> : s}
@@ -149,28 +146,28 @@ export default function NewSubmissionWizard() {
             ))}
           </div>
 
-          <Card className="p-8">
+          <Card className="p-8 shadow-xl border-0">
             {step < 4 ? (
               <form onSubmit={handleCreateMetadata} className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                 {step === 1 && (
                   <div className="space-y-5">
-                    <h3 className="text-xl font-bold font-serif border-b pb-2 mb-6">1. Asosiy ma'lumotlar</h3>
+                    <h3 className="text-xl font-bold font-serif border-b border-slate-100 pb-3 mb-6 text-slate-800">1. Asosiy ma'lumotlar</h3>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Asar nomi</label>
-                      <Input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Masalan: Oliy matematika asoslari" />
+                      <label className="block text-sm font-medium mb-1.5 text-slate-700">Asar nomi</label>
+                      <Input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Masalan: Oliy matematika asoslari" className="bg-slate-50" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Annotatsiya (Qisqacha mazmuni)</label>
-                      <Textarea required value={formData.abstract} onChange={e => setFormData({...formData, abstract: e.target.value})} placeholder="Asar nima haqida..." className="min-h-[150px]" />
+                      <label className="block text-sm font-medium mb-1.5 text-slate-700">Annotatsiya (Qisqacha mazmuni)</label>
+                      <Textarea required value={formData.abstract} onChange={e => setFormData({...formData, abstract: e.target.value})} placeholder="Asar nima haqida..." className="min-h-[150px] bg-slate-50" />
                     </div>
                     <div className="grid grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Kalit so'zlar (vergul bilan ajrating)</label>
-                        <Input value={formData.keywords} onChange={e => setFormData({...formData, keywords: e.target.value})} placeholder="matematika, fizika, teoremalar" />
+                        <label className="block text-sm font-medium mb-1.5 text-slate-700">Kalit so'zlar (vergul bilan ajrating)</label>
+                        <Input value={formData.keywords} onChange={e => setFormData({...formData, keywords: e.target.value})} placeholder="matematika, fizika, teoremalar" className="bg-slate-50" />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Asar tili</label>
-                        <Select required value={formData.language} onChange={e => setFormData({...formData, language: e.target.value})}>
+                        <label className="block text-sm font-medium mb-1.5 text-slate-700">Asar tili</label>
+                        <Select required value={formData.language} onChange={e => setFormData({...formData, language: e.target.value})} className="bg-slate-50">
                           <option value="uz">O'zbek tili</option>
                           <option value="ru">Rus tili</option>
                           <option value="en">Ingliz tili</option>
@@ -182,12 +179,12 @@ export default function NewSubmissionWizard() {
 
                 {step === 2 && (
                   <div className="space-y-5">
-                    <h3 className="text-xl font-bold font-serif border-b pb-2 mb-6">2. Yo'nalish va Kafedra</h3>
+                    <h3 className="text-xl font-bold font-serif border-b border-slate-100 pb-3 mb-6 text-slate-800">2. Yo'nalish va Kafedra</h3>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Ilmiy yo'nalish</label>
+                      <label className="block text-sm font-medium mb-3 text-slate-700">Ilmiy yo'nalish</label>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {SCIENTIFIC_DIRECTIONS.map(dir => (
-                          <label key={dir} className={`cursor-pointer border-2 rounded-xl p-4 text-center transition-all ${formData.scientificDirection === dir ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-primary/50'}`}>
+                          <label key={dir} className={`cursor-pointer border-2 rounded-xl p-4 text-center transition-all ${formData.scientificDirection === dir ? 'border-primary bg-primary/5 text-primary shadow-sm' : 'border-slate-200 hover:border-primary/50 hover:bg-slate-50'}`}>
                             <input type="radio" className="hidden" name="direction" value={dir} checked={formData.scientificDirection === dir} onChange={(e) => setFormData({...formData, scientificDirection: e.target.value})} required />
                             <span className="font-medium text-sm">{dir}</span>
                           </label>
@@ -195,9 +192,9 @@ export default function NewSubmissionWizard() {
                       </div>
                     </div>
                     <div className="mt-8">
-                      <label className="block text-sm font-medium mb-1.5">Tegishli Kafedra</label>
-                      <Select required value={formData.departmentId} onChange={e => setFormData({...formData, departmentId: e.target.value})}>
-                        <option value="">Tanlang...</option>
+                      <label className="block text-sm font-medium mb-1.5 text-slate-700">Tegishli Kafedra</label>
+                      <Select required value={formData.departmentId} onChange={e => setFormData({...formData, departmentId: e.target.value})} className="bg-slate-50">
+                        <option value="">Kafedrani tanlang...</option>
                         {departments?.map(d => (
                           <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
@@ -208,7 +205,7 @@ export default function NewSubmissionWizard() {
 
                 {step === 3 && (
                   <div className="space-y-5">
-                    <h3 className="text-xl font-bold font-serif border-b pb-2 mb-6">3. Adabiyot turi</h3>
+                    <h3 className="text-xl font-bold font-serif border-b border-slate-100 pb-3 mb-6 text-slate-800">3. Adabiyot turi</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {[
                         { id: 'darslik', label: 'Darslik', desc: 'Oliy ta\'lim uchun mo\'ljallangan asosiy darslik' },
@@ -217,42 +214,42 @@ export default function NewSubmissionWizard() {
                         { id: 'oquv_uslubiy_qollanma', label: 'O\'quv-uslubiy qo\'llanma', desc: 'Amaliy mashg\'ulotlar uchun' },
                         { id: 'uslubiy_korsatma', label: 'Uslubiy ko\'rsatma', desc: 'Laboratoriya va mustaqil ishlar uchun' }
                       ].map(type => (
-                        <label key={type.id} className={`cursor-pointer flex flex-col p-5 rounded-xl border-2 transition-all ${formData.literatureType === type.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20 ring-offset-2' : 'border-border hover:bg-muted/50'}`}>
+                        <label key={type.id} className={`cursor-pointer flex flex-col p-5 rounded-xl border-2 transition-all ${formData.literatureType === type.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20 ring-offset-2 shadow-sm' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300'}`}>
                           <input type="radio" className="hidden" name="literatureType" value={type.id} checked={formData.literatureType === type.id} onChange={(e) => setFormData({...formData, literatureType: e.target.value})} required />
-                          <span className="font-bold text-lg mb-1">{type.label}</span>
-                          <span className="text-sm text-muted-foreground">{type.desc}</span>
+                          <span className="font-bold text-lg mb-1 text-slate-800">{type.label}</span>
+                          <span className="text-sm text-slate-500">{type.desc}</span>
                         </label>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="flex justify-between pt-6 border-t">
-                  <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={step === 1}>
+                <div className="flex justify-between pt-6 border-t border-slate-100 mt-8">
+                  <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={step === 1} className="w-32">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Orqaga
                   </Button>
-                  <Button type="submit" disabled={createMutation.isPending}>
-                    {step === 3 ? (createMutation.isPending ? "Saqlanmoqda..." : "Saqlash va davom etish") : "Keyingisi"} 
+                  <Button type="submit" disabled={createMutation.isPending} className="w-48 shadow-lg shadow-primary/20">
+                    {step === 3 ? (createMutation.isPending ? "Saqlanmoqda..." : "Saqlash") : "Keyingisi"} 
                     {step < 3 && <ArrowRight className="ml-2 h-4 w-4" />}
                   </Button>
                 </div>
               </form>
             ) : (
               <div className="space-y-6 animate-in fade-in zoom-in duration-500">
-                <h3 className="text-2xl font-bold font-serif text-center mb-8">4. Hujjatlarni yuklash</h3>
+                <h3 className="text-2xl font-bold font-serif text-center mb-8 text-slate-800">4. Hujjatlarni yuklash</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {REQUIRED_DOCS.map(doc => {
                     const file = files[doc.type];
                     const status = uploadProgress[doc.type];
                     return (
-                      <div key={doc.type} className={`p-4 rounded-xl border-2 flex items-center justify-between ${file ? 'border-primary/50 bg-primary/5' : 'border-dashed border-border'}`}>
+                      <div key={doc.type} className={`p-4 rounded-xl border-2 flex items-center justify-between transition-colors ${file ? 'border-primary/30 bg-primary/5' : 'border-dashed border-slate-300 bg-slate-50'}`}>
                         <div className="flex items-center gap-4 flex-1 overflow-hidden">
-                          <div className={`p-3 rounded-lg ${file ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                          <div className={`p-3 rounded-lg ${file ? 'bg-primary text-white shadow-sm' : 'bg-slate-200 text-slate-500'}`}>
                             <FileType className="h-6 w-6" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm">{doc.label}</p>
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="font-semibold text-sm text-slate-800">{doc.label}</p>
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
                               {file ? file.name : "PDF yoki DOCX formatida"}
                             </p>
                           </div>
@@ -270,7 +267,7 @@ export default function NewSubmissionWizard() {
                                 accept=".pdf,.doc,.docx"
                                 onChange={(e) => handleFileSelect(doc.type, e.target.files?.[0] || null)}
                               />
-                              <div className="bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors px-4 py-2 rounded-lg text-sm font-medium">
+                              <div className="bg-white border border-slate-200 text-slate-700 hover:bg-primary hover:text-white hover:border-primary transition-colors px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
                                 {file ? "Almashtirish" : "Tanlash"}
                               </div>
                             </label>
@@ -281,14 +278,14 @@ export default function NewSubmissionWizard() {
                   })}
                 </div>
                 
-                <div className="pt-8 border-t mt-8 flex justify-end">
+                <div className="pt-8 border-t border-slate-100 mt-8 flex justify-end">
                   <Button 
                     size="lg" 
                     onClick={handleUploadAll} 
                     disabled={!allFilesSelected || uploadMutation.isPending || updateStatusMutation.isPending}
-                    className="w-full sm:w-auto shadow-lg shadow-primary/30"
+                    className="w-full sm:w-auto shadow-xl shadow-primary/30 text-lg px-8 h-14"
                   >
-                    <UploadCloud className="mr-2 h-5 w-5" />
+                    <UploadCloud className="mr-3 h-6 w-6" />
                     Barchasini yuklash va yuborish
                   </Button>
                 </div>

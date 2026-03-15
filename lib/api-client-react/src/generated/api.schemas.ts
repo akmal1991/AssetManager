@@ -85,6 +85,20 @@ export interface Department {
   createdAt?: string;
 }
 
+export interface CreateDepartmentRequest {
+  name: string;
+}
+
+export interface ScientificDirection {
+  id: number;
+  name: string;
+  createdAt?: string;
+}
+
+export interface CreateDirectionRequest {
+  name: string;
+}
+
 export type SubmissionLiteratureType =
   (typeof SubmissionLiteratureType)[keyof typeof SubmissionLiteratureType];
 

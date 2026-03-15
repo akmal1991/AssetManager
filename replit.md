@@ -28,7 +28,7 @@ A full-stack academic publishing portal for a university. Digitizes the workflow
 - **author** — submit manuscripts, track status
 - **editor** — review submissions, assign reviewers, update status
 - **reviewer** — fill expert evaluation forms
-- **admin** — manage users, departments, view stats
+- **admin** — manage users, departments, scientific directions (add/delete), view stats and charts
 
 ## Structure
 
@@ -44,7 +44,8 @@ artifacts-monorepo/
 │   └── db/                 # Drizzle ORM schema + DB connection
 │       └── src/schema/
 │           ├── users.ts    # users, departments tables
-│           └── submissions.ts # submissions, documents, reviews tables
+│           ├── submissions.ts # submissions, documents, reviews tables
+│           └── directions.ts # scientific_directions table
 ├── scripts/                # Utility scripts
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json

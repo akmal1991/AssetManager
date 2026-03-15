@@ -1,0 +1,73 @@
+Latin script (Uzbek Latin/English).
+
+1. ARCHITECTURE & TECH STACK
+
+Frontend: React with Tailwind CSS. Use lucide-react for icons.
+
+Backend: Express.js (Node.js).
+
+Database: PostgreSQL (Managed).
+
+Auth: JWT-based.
+
+Roles: Author, Editor, Reviewer, Admin.
+
+2. DYNAMIC UI STRUCTURE
+
+Global Header: Center "Universitet Nashriyot Portali", Right: Language Toggle (UZ/RU/EN), Profile Menu.
+
+Sidebar (Dynamic):
+
+Author: Dashboard, Yangi ariza (New Submission), Mening qo'lyozmalarim.
+
+Editor: Arizalar navbati, Taqrizchilar bazasi, Nashr qarorlari.
+
+Reviewer: Topshiriqlar, Taqrizlar tarixi.
+
+Admin: Foydalanuvchilar, Lug'atlar (Departments), Tizim loglari.
+
+3. REGISTRATION & DATA (Department List in Latin)
+Seed the departments table with these values:
+
+Amaliy informatika, Amaliy kosmetologiya, Aniq fanlar, Arxitektura va shaharsozlik, Axborot texnologiyalari, Bank ishi va buxgalteriya hisobi, Ijtimoiy gumanitar fanlar, Ingliz tili, Yo'l harakati, Klinik fanlar, Koreys tili filologiyasi, Qurilish, Libos dizayni, Maktabgacha va boshlang'ich ta'lim metodikasi, Maxsus pedagogika, Mashinasozlik texnologiyasi, Menejment va marketing, Moliya, Pedagogika va psixologiya, Rus tili, Tarjima nazariyasi va amaliyoti, Tarix, Terapevtik stomatologiya, Tibbiy biologik fanlar, Tibbiy fundamental fanlar, Turizm, Xirurgik fanlar, Xalqaro iqtisodiyot, Kimyo va biologiya, Energetika va amaliy fanlar, Pediatrik fanlar, Rang tasvir.
+
+4. THE 4-STEP SUBMISSION WIZARD
+
+Step 1: Metadata (Title, Abstract, Keywords).
+
+Step 2: Yo'nalish (Architecture, Economics, Pedagogy, Medicine, Engineering, Art).
+
+Step 3: Adabiyot turi (Darslik, O'quv qo'llanma, Monografiya, Uslubiy qo'llanma).
+
+Step 4: File Upload (Max 100MB). Required files: Ichki taqriz, Tashqi taqriz, Plagiat hisoboti, O'quv dasturi, Sillabus, Asosiy qo'lyozma.
+
+5. REVIEWER EVALUATION FORM
+
+Score fields (1-10): Ilmiy ahamiyati, Metodologiya, Tuzilishi, Originalligi.
+
+Verdict: Qabul qilinsin, Kichik tahrir, Katta tahrir, Rad etilsin.
+
+6. ADMIN CONTROLS
+
+Admin must be able to ADD or DELETE Departments and Directions via UI.
+
+Admin manages user roles.
+
+Visual Style: Academic Navy Blue (#1e3a8a) and White. Clean data tables and professional status badges.
+
+📝 Final Technical Specification (SRS) - Latin Version
+If you are saving this as a document, here is the official text:
+
+Project Name: O'quv va ilmiy adabiyotlarni ekspertizadan o'tkazish va chop etish portali
+
+Purpose: Universitetda yaratilgan darslik, o'quv qo'llanma va monografiyalarni onlayn qabul qilish va ekspertizadan o'tkazishni avtomatlashtirish.
+
+Key Navbars:
+
+Author: Dashboard, Yangi ariza, Mening qo'lyozmalarim.
+
+Editor: Arizalar navbati, Taqrizchilar bazasi, Qarorlar.
+
+Reviewer: Mening topshiriqlarim, Taqrizlar tarixi.
+
+Admin: Foydalanuvchilarni boshqarish, Lug'atlar, Tizim sozlamalari.

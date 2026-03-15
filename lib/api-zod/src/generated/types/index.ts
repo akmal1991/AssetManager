@@ -9,6 +9,8 @@
 export * from "./adminStats";
 export * from "./assignReviewerRequest";
 export * from "./authResponse";
+export * from "./createDepartmentRequest";
+export * from "./createDirectionRequest";
 export * from "./createSubmissionRequest";
 export * from "./createSubmissionRequestLiteratureType";
 export * from "./department";
@@ -25,6 +27,7 @@ export * from "./registerRequestScientificDegree";
 export * from "./review";
 export * from "./reviewStatus";
 export * from "./reviewVerdict";
+export * from "./scientificDirection";
 export * from "./submission";
 export * from "./submissionDetail";
 export * from "./submissionListResponse";

@@ -90,6 +90,54 @@ export const GetDepartmentsResponseItem = zod.object({
 export const GetDepartmentsResponse = zod.array(GetDepartmentsResponseItem);
 
 /**
+ * @summary Create department (admin only)
+ */
+export const CreateDepartmentBody = zod.object({
+  name: zod.string(),
+});
+
+/**
+ * @summary Delete department (admin only)
+ */
+export const DeleteDepartmentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteDepartmentResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary List scientific directions
+ */
+export const GetScientificDirectionsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  createdAt: zod.date().optional(),
+});
+export const GetScientificDirectionsResponse = zod.array(
+  GetScientificDirectionsResponseItem,
+);
+
+/**
+ * @summary Create scientific direction (admin only)
+ */
+export const CreateScientificDirectionBody = zod.object({
+  name: zod.string(),
+});
+
+/**
+ * @summary Delete scientific direction (admin only)
+ */
+export const DeleteScientificDirectionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteScientificDirectionResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
  * @summary List submissions (filtered by role)
  */
 export const GetSubmissionsQueryParams = zod.object({
