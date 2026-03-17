@@ -465,6 +465,125 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
 
+  /admin/users:
+    post:
+      operationId: createAdminUser
+      tags: [admin]
+      summary: Create user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminUserRequest"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /admin/users/{id}:
+    delete:
+      operationId: deleteAdminUser
+      tags: [admin]
+      summary: Delete user (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /admin/users/{id}/password:
+    patch:
+      operationId: resetUserPassword
+      tags: [admin]
+      summary: Reset user password (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /admin/export/users:
+    get:
+      operationId: exportUsers
+      tags: [admin]
+      summary: Export users as Excel (admin only)
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /admin/export/submissions:
+    get:
+      operationId: exportSubmissions
+      tags: [admin]
+      summary: Export submissions as Excel (admin only)
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /admin/export/reviews:
+    get:
+      operationId: exportReviews
+      tags: [admin]
+      summary: Export reviews as Excel (admin only)
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /admin/export/stats:
+    get:
+      operationId: exportStats
+      tags: [admin]
+      summary: Export statistics as Excel (admin only)
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
   /admin/stats:
     get:
       operationId: getAdminStats
@@ -986,3 +1105,38 @@ components:
           type: string
         isActive:
           type: boolean
+
+    CreateAdminUserRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          type: string
+          enum: [author, editor, reviewer, admin]
+        departmentId:
+          type: integer
+        scientificDegree:
+          type: string
+        position:
+          type: string
+      required: [fullName, email, password]
+
+    ResetPasswordRequest:
+      type: object
+      properties:
+        password:
+          type: string
+      required: [password]
+
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]

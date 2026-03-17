@@ -21,6 +21,7 @@ import type {
   AssignReviewerRequest,
   AuditLogListResponse,
   AuthResponse,
+  CreateAdminUserRequest,
   CreateDepartmentRequest,
   CreateDirectionRequest,
   CreateSubmissionRequest,
@@ -33,7 +34,9 @@ import type {
   HealthStatus,
   LoginRequest,
   MessageResponse,
+  OkResponse,
   RegisterRequest,
+  ResetPasswordRequest,
   Review,
   ScientificDirection,
   Submission,
@@ -1870,6 +1873,557 @@ export const useUpdateUserRole = <
 > => {
   return useMutation(getUpdateUserRoleMutationOptions(options));
 };
+
+/**
+ * @summary Create user (admin only)
+ */
+export const getCreateAdminUserUrl = () => {
+  return `/api/admin/users`;
+};
+
+export const createAdminUser = async (
+  createAdminUserRequest: CreateAdminUserRequest,
+  options?: RequestInit,
+): Promise<User> => {
+  return customFetch<User>(getCreateAdminUserUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createAdminUserRequest),
+  });
+};
+
+export const getCreateAdminUserMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAdminUser>>,
+    TError,
+    { data: BodyType<CreateAdminUserRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAdminUser>>,
+  TError,
+  { data: BodyType<CreateAdminUserRequest> },
+  TContext
+> => {
+  const mutationKey = ["createAdminUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAdminUser>>,
+    { data: BodyType<CreateAdminUserRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createAdminUser(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateAdminUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createAdminUser>>
+>;
+export type CreateAdminUserMutationBody = BodyType<CreateAdminUserRequest>;
+export type CreateAdminUserMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create user (admin only)
+ */
+export const useCreateAdminUser = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAdminUser>>,
+    TError,
+    { data: BodyType<CreateAdminUserRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createAdminUser>>,
+  TError,
+  { data: BodyType<CreateAdminUserRequest> },
+  TContext
+> => {
+  return useMutation(getCreateAdminUserMutationOptions(options));
+};
+
+/**
+ * @summary Delete user (admin only)
+ */
+export const getDeleteAdminUserUrl = (id: number) => {
+  return `/api/admin/users/${id}`;
+};
+
+export const deleteAdminUser = async (
+  id: number,
+  options?: RequestInit,
+): Promise<OkResponse> => {
+  return customFetch<OkResponse>(getDeleteAdminUserUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteAdminUserMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAdminUser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAdminUser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteAdminUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAdminUser>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteAdminUser(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAdminUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAdminUser>>
+>;
+
+export type DeleteAdminUserMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete user (admin only)
+ */
+export const useDeleteAdminUser = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAdminUser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAdminUser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteAdminUserMutationOptions(options));
+};
+
+/**
+ * @summary Reset user password (admin only)
+ */
+export const getResetUserPasswordUrl = (id: number) => {
+  return `/api/admin/users/${id}/password`;
+};
+
+export const resetUserPassword = async (
+  id: number,
+  resetPasswordRequest: ResetPasswordRequest,
+  options?: RequestInit,
+): Promise<OkResponse> => {
+  return customFetch<OkResponse>(getResetUserPasswordUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPasswordRequest),
+  });
+};
+
+export const getResetUserPasswordMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetUserPassword>>,
+    TError,
+    { id: number; data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetUserPassword>>,
+  TError,
+  { id: number; data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  const mutationKey = ["resetUserPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetUserPassword>>,
+    { id: number; data: BodyType<ResetPasswordRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return resetUserPassword(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetUserPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetUserPassword>>
+>;
+export type ResetUserPasswordMutationBody = BodyType<ResetPasswordRequest>;
+export type ResetUserPasswordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reset user password (admin only)
+ */
+export const useResetUserPassword = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetUserPassword>>,
+    TError,
+    { id: number; data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetUserPassword>>,
+  TError,
+  { id: number; data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  return useMutation(getResetUserPasswordMutationOptions(options));
+};
+
+/**
+ * @summary Export users as Excel (admin only)
+ */
+export const getExportUsersUrl = () => {
+  return `/api/admin/export/users`;
+};
+
+export const exportUsers = async (options?: RequestInit): Promise<Blob> => {
+  return customFetch<Blob>(getExportUsersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportUsersQueryKey = () => {
+  return [`/api/admin/export/users`] as const;
+};
+
+export const getExportUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportUsersQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportUsers>>> = ({
+    signal,
+  }) => exportUsers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportUsers>>
+>;
+export type ExportUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export users as Excel (admin only)
+ */
+
+export function useExportUsers<
+  TData = Awaited<ReturnType<typeof exportUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportUsersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Export submissions as Excel (admin only)
+ */
+export const getExportSubmissionsUrl = () => {
+  return `/api/admin/export/submissions`;
+};
+
+export const exportSubmissions = async (
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getExportSubmissionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportSubmissionsQueryKey = () => {
+  return [`/api/admin/export/submissions`] as const;
+};
+
+export const getExportSubmissionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportSubmissions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportSubmissions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportSubmissionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof exportSubmissions>>
+  > = ({ signal }) => exportSubmissions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportSubmissions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportSubmissionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportSubmissions>>
+>;
+export type ExportSubmissionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export submissions as Excel (admin only)
+ */
+
+export function useExportSubmissions<
+  TData = Awaited<ReturnType<typeof exportSubmissions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportSubmissions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportSubmissionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Export reviews as Excel (admin only)
+ */
+export const getExportReviewsUrl = () => {
+  return `/api/admin/export/reviews`;
+};
+
+export const exportReviews = async (options?: RequestInit): Promise<Blob> => {
+  return customFetch<Blob>(getExportReviewsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportReviewsQueryKey = () => {
+  return [`/api/admin/export/reviews`] as const;
+};
+
+export const getExportReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportReviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportReviewsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportReviews>>> = ({
+    signal,
+  }) => exportReviews({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportReviews>>
+>;
+export type ExportReviewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export reviews as Excel (admin only)
+ */
+
+export function useExportReviews<
+  TData = Awaited<ReturnType<typeof exportReviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportReviewsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Export statistics as Excel (admin only)
+ */
+export const getExportStatsUrl = () => {
+  return `/api/admin/export/stats`;
+};
+
+export const exportStats = async (options?: RequestInit): Promise<Blob> => {
+  return customFetch<Blob>(getExportStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportStatsQueryKey = () => {
+  return [`/api/admin/export/stats`] as const;
+};
+
+export const getExportStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportStats>>> = ({
+    signal,
+  }) => exportStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportStats>>
+>;
+export type ExportStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export statistics as Excel (admin only)
+ */
+
+export function useExportStats<
+  TData = Awaited<ReturnType<typeof exportStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get admin statistics

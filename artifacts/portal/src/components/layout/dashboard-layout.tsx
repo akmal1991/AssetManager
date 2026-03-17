@@ -22,6 +22,7 @@ import {
   Mail,
   Settings2,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,7 @@ const ROLE_LINKS = {
     { href: "/dashboard/admin/users", label: "Foydalanuvchilar", icon: Users },
     { href: "/dashboard/admin/dictionaries", label: "Lug'at sozlamalari", icon: Settings2 },
     { href: "/dashboard/admin/email-templates", label: "Email shablonlari", icon: Mail },
+    { href: "/dashboard/admin/reports", label: "Excel Hisobotlar", icon: Download },
     { href: "/dashboard/admin/logs", label: "Audit Loglari", icon: Activity },
   ],
 };

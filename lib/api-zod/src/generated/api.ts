@@ -661,6 +661,45 @@ export const UpdateUserRoleResponse = zod.object({
 });
 
 /**
+ * @summary Create user (admin only)
+ */
+export const CreateAdminUserBody = zod.object({
+  fullName: zod.string(),
+  email: zod.string().email(),
+  password: zod.string(),
+  role: zod.enum(["author", "editor", "reviewer", "admin"]).optional(),
+  departmentId: zod.number().optional(),
+  scientificDegree: zod.string().optional(),
+  position: zod.string().optional(),
+});
+
+/**
+ * @summary Delete user (admin only)
+ */
+export const DeleteAdminUserParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteAdminUserResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Reset user password (admin only)
+ */
+export const ResetUserPasswordParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ResetUserPasswordBody = zod.object({
+  password: zod.string(),
+});
+
+export const ResetUserPasswordResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
  * @summary Get admin statistics
  */
 export const GetAdminStatsResponse = zod.object({

@@ -371,6 +371,34 @@ export interface UpdateEmailTemplateRequest {
   isActive?: boolean;
 }
 
+export type CreateAdminUserRequestRole =
+  (typeof CreateAdminUserRequestRole)[keyof typeof CreateAdminUserRequestRole];
+
+export const CreateAdminUserRequestRole = {
+  author: "author",
+  editor: "editor",
+  reviewer: "reviewer",
+  admin: "admin",
+} as const;
+
+export interface CreateAdminUserRequest {
+  fullName: string;
+  email: string;
+  password: string;
+  role?: CreateAdminUserRequestRole;
+  departmentId?: number;
+  scientificDegree?: string;
+  position?: string;
+}
+
+export interface ResetPasswordRequest {
+  password: string;
+}
+
+export interface OkResponse {
+  ok: boolean;
+}
+
 export type GetSubmissionsParams = {
   status?: string;
   page?: number;
