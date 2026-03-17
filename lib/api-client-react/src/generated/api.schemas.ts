@@ -316,15 +316,59 @@ export interface UpdateRoleRequest {
   role: UpdateRoleRequestRole;
 }
 
+export type AdminStatsSubmissionsByStatus = {
+  submitted?: number;
+  under_review?: number;
+  revision_required?: number;
+  accepted?: number;
+  rejected?: number;
+  published?: number;
+};
+
 export interface AdminStats {
   totalSubmissions: number;
-  pendingReview: number;
-  underReview: number;
-  accepted: number;
-  rejected: number;
-  published: number;
   totalUsers: number;
-  totalReviewers: number;
+  totalAuthors?: number;
+  totalEditors?: number;
+  totalReviewers?: number;
+  totalAdmins?: number;
+  published: number;
+  submissionsByStatus: AdminStatsSubmissionsByStatus;
+}
+
+export interface AuditLog {
+  id: number;
+  userId?: number;
+  userEmail?: string;
+  userRole?: string;
+  action: string;
+  entityType?: string;
+  entityId?: string;
+  detail?: string;
+  ipAddress?: string;
+  createdAt: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLog[];
+  total: number;
+}
+
+export interface EmailTemplate {
+  id: number;
+  key: string;
+  name: string;
+  subject: string;
+  body: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpdateEmailTemplateRequest {
+  subject?: string;
+  body?: string;
+  isActive?: boolean;
 }
 
 export type GetSubmissionsParams = {
@@ -336,4 +380,9 @@ export type GetSubmissionsParams = {
 export type UploadDocumentBody = {
   file?: Blob;
   docType?: string;
+};
+
+export type GetAuditLogsParams = {
+  limit?: number;
+  offset?: number;
 };

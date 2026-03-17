@@ -6,6 +6,7 @@ import { db } from "@workspace/db";
 import { submissionsTable, documentsTable, reviewsTable, usersTable, departmentsTable } from "@workspace/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
+import { logAction } from "../lib/audit.js";
 
 const router = Router();
 
@@ -116,6 +117,7 @@ router.post("/", requireAuth, async (req, res) => {
     }).returning();
     const sub = inserted[0];
     const row = await getSubmissionWithDetails(sub.id);
+    await logAction(req, "submission_created", { entityType: "submission", entityId: sub.id, detail: `"${title}" (${literatureType})` });
     res.status(201).json(formatSub(row));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -155,6 +157,7 @@ router.patch("/:id/status", requireAuth, requireRole("editor", "admin"), async (
       .set({ status, editorNotes: notes ?? null, updatedAt: new Date() })
       .where(eq(submissionsTable.id, id));
     const row = await getSubmissionWithDetails(id);
+    await logAction(req, "submission_status_changed", { entityType: "submission", entityId: id, detail: `Status → ${status}${notes ? `: ${notes}` : ""}` });
     res.json(formatSub(row));
   } catch (err: any) {
     res.status(500).json({ error: err.message });

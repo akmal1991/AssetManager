@@ -19,13 +19,16 @@ import type {
 import type {
   AdminStats,
   AssignReviewerRequest,
+  AuditLogListResponse,
   AuthResponse,
   CreateDepartmentRequest,
   CreateDirectionRequest,
   CreateSubmissionRequest,
   Department,
   Document,
+  EmailTemplate,
   ErrorResponse,
+  GetAuditLogsParams,
   GetSubmissionsParams,
   HealthStatus,
   LoginRequest,
@@ -37,6 +40,7 @@ import type {
   SubmissionDetail,
   SubmissionListResponse,
   SubmitReviewRequest,
+  UpdateEmailTemplateRequest,
   UpdateRoleRequest,
   UpdateStatusRequest,
   UploadDocumentBody,
@@ -1941,3 +1945,260 @@ export function useGetAdminStats<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get audit logs (admin only)
+ */
+export const getGetAuditLogsUrl = (params?: GetAuditLogsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/audit-logs?${stringifiedParams}`
+    : `/api/admin/audit-logs`;
+};
+
+export const getAuditLogs = async (
+  params?: GetAuditLogsParams,
+  options?: RequestInit,
+): Promise<AuditLogListResponse> => {
+  return customFetch<AuditLogListResponse>(getGetAuditLogsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuditLogsQueryKey = (params?: GetAuditLogsParams) => {
+  return [`/api/admin/audit-logs`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAuditLogsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuditLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAuditLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuditLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAuditLogsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuditLogs>>> = ({
+    signal,
+  }) => getAuditLogs(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuditLogs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuditLogsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuditLogs>>
+>;
+export type GetAuditLogsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get audit logs (admin only)
+ */
+
+export function useGetAuditLogs<
+  TData = Awaited<ReturnType<typeof getAuditLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAuditLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuditLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuditLogsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get email templates (admin only)
+ */
+export const getGetEmailTemplatesUrl = () => {
+  return `/api/admin/email-templates`;
+};
+
+export const getEmailTemplates = async (
+  options?: RequestInit,
+): Promise<EmailTemplate[]> => {
+  return customFetch<EmailTemplate[]>(getGetEmailTemplatesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEmailTemplatesQueryKey = () => {
+  return [`/api/admin/email-templates`] as const;
+};
+
+export const getGetEmailTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEmailTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEmailTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetEmailTemplatesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEmailTemplates>>
+  > = ({ signal }) => getEmailTemplates({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEmailTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEmailTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEmailTemplates>>
+>;
+export type GetEmailTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get email templates (admin only)
+ */
+
+export function useGetEmailTemplates<
+  TData = Awaited<ReturnType<typeof getEmailTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEmailTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEmailTemplatesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update email template (admin only)
+ */
+export const getUpdateEmailTemplateUrl = (id: number) => {
+  return `/api/admin/email-templates/${id}`;
+};
+
+export const updateEmailTemplate = async (
+  id: number,
+  updateEmailTemplateRequest: UpdateEmailTemplateRequest,
+  options?: RequestInit,
+): Promise<EmailTemplate> => {
+  return customFetch<EmailTemplate>(getUpdateEmailTemplateUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateEmailTemplateRequest),
+  });
+};
+
+export const getUpdateEmailTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEmailTemplate>>,
+    TError,
+    { id: number; data: BodyType<UpdateEmailTemplateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEmailTemplate>>,
+  TError,
+  { id: number; data: BodyType<UpdateEmailTemplateRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateEmailTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEmailTemplate>>,
+    { id: number; data: BodyType<UpdateEmailTemplateRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateEmailTemplate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateEmailTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEmailTemplate>>
+>;
+export type UpdateEmailTemplateMutationBody =
+  BodyType<UpdateEmailTemplateRequest>;
+export type UpdateEmailTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update email template (admin only)
+ */
+export const useUpdateEmailTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEmailTemplate>>,
+    TError,
+    { id: number; data: BodyType<UpdateEmailTemplateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateEmailTemplate>>,
+  TError,
+  { id: number; data: BodyType<UpdateEmailTemplateRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateEmailTemplateMutationOptions(options));
+};

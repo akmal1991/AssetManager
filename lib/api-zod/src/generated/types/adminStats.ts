@@ -5,14 +5,15 @@
  * Academic Publishing Portal API
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminStatsSubmissionsByStatus } from "./adminStatsSubmissionsByStatus";
 
 export interface AdminStats {
   totalSubmissions: number;
-  pendingReview: number;
-  underReview: number;
-  accepted: number;
-  rejected: number;
-  published: number;
   totalUsers: number;
-  totalReviewers: number;
+  totalAuthors?: number;
+  totalEditors?: number;
+  totalReviewers?: number;
+  totalAdmins?: number;
+  published: number;
+  submissionsByStatus: AdminStatsSubmissionsByStatus;
 }

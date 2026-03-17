@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { usersTable, departmentsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { signToken, requireAuth } from "../lib/auth.js";
+import { logAction } from "../lib/audit.js";
 
 const router = Router();
 
@@ -32,11 +33,13 @@ router.post("/register", async (req, res) => {
     }).returning();
     const user = inserted[0];
     const token = signToken(user.id);
-    const dept = departmentId ? await db.select().from(departmentsTable).where(eq(departmentsTable.id, user.departmentId!)).limit(1) : [];
-    res.status(201).json({
-      user: formatUser(user, dept[0]?.name),
-      token,
-    });
+    const dept = departmentId
+      ? await db.select().from(departmentsTable).where(eq(departmentsTable.id, user.departmentId!)).limit(1)
+      : [];
+    // Audit
+    (req as any).user = user;
+    await logAction(req, "user_registered", { entityType: "user", entityId: user.id, detail: `${email} registered` });
+    res.status(201).json({ user: formatUser(user, dept[0]?.name), token });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -61,20 +64,28 @@ router.post("/login", async (req, res) => {
       return;
     }
     const token = signToken(user.id);
-    const dept = user.departmentId ? await db.select().from(departmentsTable).where(eq(departmentsTable.id, user.departmentId)).limit(1) : [];
+    const dept = user.departmentId
+      ? await db.select().from(departmentsTable).where(eq(departmentsTable.id, user.departmentId)).limit(1)
+      : [];
+    // Audit
+    (req as any).user = user;
+    await logAction(req, "user_login", { entityType: "user", entityId: user.id, detail: `${email} logged in` });
     res.json({ user: formatUser(user, dept[0]?.name), token });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post("/logout", (_req, res) => {
+router.post("/logout", requireAuth, async (req, res) => {
+  await logAction(req, "user_logout", { entityType: "user", entityId: (req as any).user?.id });
   res.json({ message: "Logged out" });
 });
 
 router.get("/me", requireAuth, async (req, res) => {
   const user = (req as any).user;
-  const dept = user.departmentId ? await db.select().from(departmentsTable).where(eq(departmentsTable.id, user.departmentId)).limit(1) : [];
+  const dept = user.departmentId
+    ? await db.select().from(departmentsTable).where(eq(departmentsTable.id, user.departmentId)).limit(1)
+    : [];
   res.json(formatUser(user, dept[0]?.name));
 });
 

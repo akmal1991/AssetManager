@@ -665,11 +665,85 @@ export const UpdateUserRoleResponse = zod.object({
  */
 export const GetAdminStatsResponse = zod.object({
   totalSubmissions: zod.number(),
-  pendingReview: zod.number(),
-  underReview: zod.number(),
-  accepted: zod.number(),
-  rejected: zod.number(),
-  published: zod.number(),
   totalUsers: zod.number(),
-  totalReviewers: zod.number(),
+  totalAuthors: zod.number().optional(),
+  totalEditors: zod.number().optional(),
+  totalReviewers: zod.number().optional(),
+  totalAdmins: zod.number().optional(),
+  published: zod.number(),
+  submissionsByStatus: zod.object({
+    submitted: zod.number().optional(),
+    under_review: zod.number().optional(),
+    revision_required: zod.number().optional(),
+    accepted: zod.number().optional(),
+    rejected: zod.number().optional(),
+    published: zod.number().optional(),
+  }),
+});
+
+/**
+ * @summary Get audit logs (admin only)
+ */
+export const GetAuditLogsQueryParams = zod.object({
+  limit: zod.coerce.number().optional(),
+  offset: zod.coerce.number().optional(),
+});
+
+export const GetAuditLogsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number().optional(),
+      userEmail: zod.string().optional(),
+      userRole: zod.string().optional(),
+      action: zod.string(),
+      entityType: zod.string().optional(),
+      entityId: zod.string().optional(),
+      detail: zod.string().optional(),
+      ipAddress: zod.string().optional(),
+      createdAt: zod.date(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * @summary Get email templates (admin only)
+ */
+export const GetEmailTemplatesResponseItem = zod.object({
+  id: zod.number(),
+  key: zod.string(),
+  name: zod.string(),
+  subject: zod.string(),
+  body: zod.string(),
+  isActive: zod.boolean(),
+  createdAt: zod.date().optional(),
+  updatedAt: zod.date().optional(),
+});
+export const GetEmailTemplatesResponse = zod.array(
+  GetEmailTemplatesResponseItem,
+);
+
+/**
+ * @summary Update email template (admin only)
+ */
+export const UpdateEmailTemplateParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateEmailTemplateBody = zod.object({
+  subject: zod.string().optional(),
+  body: zod.string().optional(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdateEmailTemplateResponse = zod.object({
+  id: zod.number(),
+  key: zod.string(),
+  name: zod.string(),
+  subject: zod.string(),
+  body: zod.string(),
+  isActive: zod.boolean(),
+  createdAt: zod.date().optional(),
+  updatedAt: zod.date().optional(),
 });

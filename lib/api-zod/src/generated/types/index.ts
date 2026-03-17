@@ -7,7 +7,10 @@
  */
 
 export * from "./adminStats";
+export * from "./adminStatsSubmissionsByStatus";
 export * from "./assignReviewerRequest";
+export * from "./auditLog";
+export * from "./auditLogListResponse";
 export * from "./authResponse";
 export * from "./createDepartmentRequest";
 export * from "./createDirectionRequest";
@@ -16,7 +19,9 @@ export * from "./createSubmissionRequestLiteratureType";
 export * from "./department";
 export * from "./document";
 export * from "./documentDocType";
+export * from "./emailTemplate";
 export * from "./errorResponse";
+export * from "./getAuditLogsParams";
 export * from "./getSubmissionsParams";
 export * from "./healthStatus";
 export * from "./loginRequest";
@@ -35,6 +40,7 @@ export * from "./submissionLiteratureType";
 export * from "./submissionStatus";
 export * from "./submitReviewRequest";
 export * from "./submitReviewRequestVerdict";
+export * from "./updateEmailTemplateRequest";
 export * from "./updateRoleRequest";
 export * from "./updateRoleRequestRole";
 export * from "./updateStatusRequest";

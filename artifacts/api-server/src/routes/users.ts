@@ -3,16 +3,14 @@ import { db } from "@workspace/db";
 import { usersTable, departmentsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
+import { logAction } from "../lib/audit.js";
 
 const router = Router();
 
 router.get("/", requireAuth, requireRole("admin", "editor"), async (req, res) => {
   try {
     const rows = await db
-      .select({
-        user: usersTable,
-        deptName: departmentsTable.name,
-      })
+      .select({ user: usersTable, deptName: departmentsTable.name })
       .from(usersTable)
       .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id))
       .orderBy(usersTable.createdAt);
@@ -46,23 +44,34 @@ router.patch("/:id/role", requireAuth, requireRole("admin"), async (req, res) =>
       res.status(400).json({ error: "role required" });
       return;
     }
+    // Get old role for audit
+    const before = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    const oldRole = before[0]?.role ?? "?";
+
     await db.update(usersTable).set({ role }).where(eq(usersTable.id, id));
+
     const updated = await db
       .select({ user: usersTable, deptName: departmentsTable.name })
       .from(usersTable)
       .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id))
       .where(eq(usersTable.id, id))
       .limit(1);
+
     if (!updated[0]) {
       res.status(404).json({ error: "User not found" });
       return;
     }
     const r = updated[0];
+    await logAction(req, "role_changed", {
+      entityType: "user", entityId: id,
+      detail: `${r.user.email}: ${oldRole} → ${role}`,
+    });
     res.json({
       id: r.user.id,
       fullName: r.user.fullName,
       email: r.user.email,
       role: r.user.role,
+      departmentId: r.user.departmentId,
       departmentName: r.deptName,
       scientificDegree: r.user.scientificDegree,
       position: r.user.position,
