@@ -1,6 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import Database from "better-sqlite3";
+import Database, { type Database as DatabaseType } from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 
@@ -25,7 +25,7 @@ function resolveDatabasePath(input?: string) {
 }
 
 export const databaseFilePath = resolveDatabasePath(process.env.DATABASE_URL);
-export const sqlite = new Database(databaseFilePath);
+export const sqlite: DatabaseType = new Database(databaseFilePath);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
