@@ -33,8 +33,10 @@ jobs:
             # Update database schema and push changes
             pnpm --filter @workspace/db run push
             
-            # Build the frontend and backend libraries
-            pnpm run build
+            # Build libs (typecheck), then API server and portal
+            pnpm run typecheck:libs
+            pnpm --filter @workspace/api-server run build
+            pnpm --filter @workspace/portal run build
             
             # Restart the unified PM2 process
             # We assume you started it initially like: 
