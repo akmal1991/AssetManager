@@ -1,12 +1,9 @@
-import { sql } from "drizzle-orm";
-import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
-export const scientificDirectionsTable = sqliteTable("scientific_directions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const scientificDirectionsTable = pgTable("scientific_directions", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type ScientificDirection = typeof scientificDirectionsTable.$inferSelect;

@@ -1,8 +1,7 @@
-import { sql } from "drizzle-orm";
-import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+import { pgTable, serial, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 
-export const auditLogsTable = sqliteTable("audit_logs", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const auditLogsTable = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
   userId: integer("user_id"),
   userEmail: text("user_email"),
   userRole: text("user_role"),
@@ -11,24 +10,18 @@ export const auditLogsTable = sqliteTable("audit_logs", {
   entityId: text("entity_id"),
   detail: text("detail"),
   ipAddress: text("ip_address"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const emailTemplatesTable = sqliteTable("email_templates", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const emailTemplatesTable = pgTable("email_templates", {
+  id: serial("id").primaryKey(),
   key: text("key").notNull().unique(),
   name: text("name").notNull(),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export type AuditLog = typeof auditLogsTable.$inferSelect;
