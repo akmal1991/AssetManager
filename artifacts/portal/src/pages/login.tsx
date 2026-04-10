@@ -3,12 +3,13 @@ import { useLogin, useRegister, useGetDepartments } from "@workspace/api-client-
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { Button, Card, Input, Select, PageTransition } from "@/components/ui/shared";
-import { GraduationCap, ArrowRight, UserPlus, LogIn } from "lucide-react";
+import { GraduationCap, ArrowRight, UserPlus, LogIn, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocale } from "@/lib/i18n";
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const { setToken, isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -158,7 +159,12 @@ export default function Login() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     {t({ uz: "Parol", en: "Password", ru: "Пароль" })}
                   </label>
-                  <Input name="password" type="password" placeholder="********" required />
+                  <div className="relative">
+                    <Input name="password" type={showPassword ? "text" : "password"} placeholder="********" required className="pr-10" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <Button type="submit" className="w-full" size="lg" disabled={loginMutation.isPending}>
                   {loginMutation.isPending
@@ -185,7 +191,12 @@ export default function Login() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1.5">{t({ uz: "Parol", en: "Password", ru: "Пароль" })}</label>
-                  <Input name="password" type="password" required />
+                  <div className="relative">
+                    <Input name="password" type={showPassword ? "text" : "password"} required className="pr-10" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1.5">{t({ uz: "Kafedra", en: "Department", ru: "Кафедра" })}</label>
