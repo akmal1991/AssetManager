@@ -30,6 +30,34 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 
+function safeUnlink(filePath: string | null | undefined) {
+  if (!filePath) return;
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error(`Failed to delete uploaded file: ${filePath}`, error);
+  }
+}
+
+async function ensureSubmissionAccess(req: any, submissionId: number) {
+  const user = req.user;
+  const submission = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId)).limit(1);
+  const current = submission[0];
+
+  if (!current) {
+    return { error: { status: 404, message: "Submission not found" } };
+  }
+
+  const canManage = user.role === "admin" || user.role === "editor" || current.authorId === user.id;
+  if (!canManage) {
+    return { error: { status: 403, message: "Forbidden" } };
+  }
+
+  return { submission: current };
+}
+
 async function getSubmissionWithDetails(id: number) {
   const subs = await db
     .select({
@@ -224,6 +252,7 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
       .where(and(eq(documentsTable.submissionId, submissionId), eq(documentsTable.docType, docType)))
       .limit(1);
     if (existing[0]) {
+      safeUnlink(existing[0].filePath);
       await db.update(documentsTable)
         .set({ fileName: req.file.originalname, fileSize: req.file.size, filePath: req.file.path })
         .where(eq(documentsTable.id, existing[0].id));
@@ -239,6 +268,68 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
       filePath: req.file.path,
     }).returning();
     res.json(inserted[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/:id/documents/:documentId", requireAuth, async (req, res) => {
+  try {
+    const submissionId = parseInt(req.params.id);
+    const documentId = parseInt(req.params.documentId);
+
+    const access = await ensureSubmissionAccess(req as any, submissionId);
+    if ("error" in access) {
+      res.status(access.error.status).json({ error: access.error.message });
+      return;
+    }
+
+    const document = await db
+      .select()
+      .from(documentsTable)
+      .where(and(eq(documentsTable.id, documentId), eq(documentsTable.submissionId, submissionId)))
+      .limit(1);
+
+    if (!document[0]) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    safeUnlink(document[0].filePath);
+    await db.delete(documentsTable).where(eq(documentsTable.id, documentId));
+
+    res.json({ message: "Document deleted" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/:id", requireAuth, async (req, res) => {
+  try {
+    const submissionId = parseInt(req.params.id);
+
+    const access = await ensureSubmissionAccess(req as any, submissionId);
+    if ("error" in access) {
+      res.status(access.error.status).json({ error: access.error.message });
+      return;
+    }
+
+    const documents = await db.select().from(documentsTable).where(eq(documentsTable.submissionId, submissionId));
+    for (const document of documents) {
+      safeUnlink(document.filePath);
+    }
+
+    await db.delete(documentsTable).where(eq(documentsTable.submissionId, submissionId));
+    await db.delete(reviewsTable).where(eq(reviewsTable.submissionId, submissionId));
+    await db.delete(submissionsTable).where(eq(submissionsTable.id, submissionId));
+
+    await logAction(req, "submission_deleted", {
+      entityType: "submission",
+      entityId: submissionId,
+      detail: `Submission deleted: ${access.submission.title}`,
+    });
+
+    res.json({ message: "Submission deleted" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
