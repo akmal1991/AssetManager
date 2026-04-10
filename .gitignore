@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+local.db
+local.db-shm
+local.db-wal
+uploads/

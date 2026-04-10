@@ -1,28 +1,44 @@
-import { pgTable, serial, text, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const roleEnum = pgEnum("role", ["author", "editor", "reviewer", "admin"]);
-export const degreeEnum = pgEnum("scientific_degree", ["PhD", "DSc", "none"]);
-export const positionEnum = pgEnum("position", ["teacher", "senior_teacher", "associate_professor", "professor"]);
+export const roleValues = ["author", "editor", "reviewer", "admin"] as const;
+export const degreeValues = ["PhD", "DSc", "none"] as const;
+export const positionValues = [
+  "teacher",
+  "senior_teacher",
+  "associate_professor",
+  "professor",
+] as const;
 
-export const departmentsTable = pgTable("departments", {
-  id: serial("id").primaryKey(),
+const timestampDefault = sql`(unixepoch() * 1000)`;
+
+export const departmentsTable = sqliteTable("departments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(timestampDefault),
 });
 
-export const usersTable = pgTable("users", {
-  id: serial("id").primaryKey(),
+export const usersTable = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   fullName: text("full_name").notNull(),
   email: text("email").notNull().unique(),
   phone: text("phone"),
   passwordHash: text("password_hash").notNull(),
-  role: roleEnum("role").notNull().default("author"),
+  role: text("role", { enum: roleValues }).notNull().default("author"),
   departmentId: integer("department_id").references(() => departmentsTable.id),
-  scientificDegree: degreeEnum("scientific_degree").notNull().default("none"),
-  position: positionEnum("position").notNull().default("teacher"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  scientificDegree: text("scientific_degree", { enum: degreeValues })
+    .notNull()
+    .default("none"),
+  position: text("position", { enum: positionValues })
+    .notNull()
+    .default("teacher"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(timestampDefault),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });

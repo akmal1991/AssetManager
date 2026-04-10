@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-
 import Login from "./pages/login";
 import AuthorDashboard from "./pages/dashboard/author";
 import EditorDashboard from "./pages/dashboard/editor";
@@ -12,21 +11,28 @@ import ReviewerDashboard from "./pages/dashboard/reviewer";
 import AdminDashboard from "./pages/dashboard/admin";
 import NewSubmissionWizard from "./pages/submissions/new";
 import ReviewForm from "./pages/reviews/[id]";
-
 import { useAuth } from "./hooks/use-auth";
 import { LoadingSpinner } from "./components/ui/shared";
+import {
+  DEFAULT_LOCALE,
+  getLocaleFromPath,
+  getPreferredLocale,
+  isLocale,
+  setPreferredLocale,
+  withLocale,
+  type Locale,
+} from "./lib/i18n";
 
 const originalFetch = window.fetch;
 window.fetch = async (input, init) => {
-  let url = input.toString();
-  if (url.includes('/api/')) {
-    const token = localStorage.getItem('portal_token');
+  const url = input.toString();
+  if (url.includes("/api/")) {
+    const token = localStorage.getItem("portal_token");
     if (token) {
       init = init || {};
-      init.headers = {
-        ...init.headers,
-        Authorization: `Bearer ${token}`,
-      };
+      const headers = new Headers(init.headers);
+      headers.set("Authorization", `Bearer ${token}`);
+      init.headers = headers;
     }
   }
   return originalFetch(input, init);
@@ -41,22 +47,36 @@ const queryClient = new QueryClient({
   },
 });
 
-function ProtectedRoute({ component: Component, allowedRoles }: { component: any, allowedRoles?: string[] }) {
+function LoadingScreen() {
+  return <div className="h-screen w-screen flex items-center justify-center bg-background"><LoadingSpinner /></div>;
+}
+
+function ProtectedRoute({
+  component: Component,
+  allowedRoles,
+}: {
+  component: any;
+  allowedRoles?: string[];
+}) {
   const { user, isLoading, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const locale = getLocaleFromPath(location);
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!isAuthenticated) {
-        setLocation("/login");
-      } else if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-        setLocation(`/dashboard/${user.role}`);
-      }
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      setLocation(withLocale("/login", locale));
+      return;
     }
-  }, [isLoading, isAuthenticated, user, allowedRoles, setLocation]);
+
+    if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+      setLocation(withLocale(`/dashboard/${user.role}`, locale));
+    }
+  }, [allowedRoles, isAuthenticated, isLoading, locale, setLocation, user]);
 
   if (isLoading) {
-    return <div className="h-screen w-screen flex items-center justify-center bg-background"><LoadingSpinner /></div>;
+    return <LoadingScreen />;
   }
 
   if (!isAuthenticated || (allowedRoles && user && !allowedRoles.includes(user.role))) {
@@ -66,65 +86,129 @@ function ProtectedRoute({ component: Component, allowedRoles }: { component: any
   return <Component />;
 }
 
-function DefaultRedirect() {
-  const { user, isLoading, isAuthenticated } = useAuth();
+function LocaleRedirect({ locale }: { locale: Locale }) {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (isAuthenticated && user) {
-        setLocation(`/dashboard/${user.role}`);
-      } else {
-        setLocation("/login");
-      }
-    }
-  }, [isLoading, isAuthenticated, user, setLocation]);
+    setPreferredLocale(locale);
+    setLocation(`/${locale}`);
+  }, [locale, setLocation]);
 
-  return <div className="h-screen w-screen flex items-center justify-center bg-background"><LoadingSpinner /></div>;
+  return <LoadingScreen />;
+}
+
+function PathRedirect({ to }: { to: string }) {
+  const [location, setLocation] = useLocation();
+  const locale = getLocaleFromPath(location);
+
+  useEffect(() => {
+    setLocation(withLocale(to, locale));
+  }, [locale, setLocation, to]);
+
+  return <LoadingScreen />;
+}
+
+function DefaultRedirect() {
+  const { user, isLoading, isAuthenticated } = useAuth();
+  const [location, setLocation] = useLocation();
+  const locale = getLocaleFromPath(location);
+
+  useEffect(() => {
+    setPreferredLocale(locale);
+    if (isLoading) return;
+
+    if (isAuthenticated && user) {
+      setLocation(withLocale(`/dashboard/${user.role}`, locale));
+      return;
+    }
+
+    setLocation(withLocale("/login", locale));
+  }, [isAuthenticated, isLoading, locale, setLocation, user]);
+
+  return <LoadingScreen />;
 }
 
 function Router() {
+  const preferredLocale = getPreferredLocale();
+
   return (
     <Switch>
-      <Route path="/" component={DefaultRedirect} />
-      <Route path="/login" component={Login} />
+      <Route path="/">
+        <LocaleRedirect locale={preferredLocale} />
+      </Route>
 
-      {/* Author Routes */}
-      <Route path="/dashboard/author">
-        {() => <ProtectedRoute component={AuthorDashboard} allowedRoles={['author']} />}
+      <Route path="/login">
+        <PathRedirect to="/login" />
       </Route>
-      <Route path="/dashboard/author/:tab">
-        {() => <ProtectedRoute component={AuthorDashboard} allowedRoles={['author']} />}
+
+      <Route path="/dashboard/:role">
+        <PathRedirect to="/dashboard/author" />
       </Route>
+
       <Route path="/submissions/new">
-        {() => <ProtectedRoute component={NewSubmissionWizard} allowedRoles={['author']} />}
+        <PathRedirect to="/submissions/new" />
       </Route>
 
-      {/* Editor Routes */}
-      <Route path="/dashboard/editor">
-        {() => <ProtectedRoute component={EditorDashboard} allowedRoles={['editor', 'admin']} />}
-      </Route>
-      <Route path="/dashboard/editor/:tab">
-        {() => <ProtectedRoute component={EditorDashboard} allowedRoles={['editor', 'admin']} />}
-      </Route>
-
-      {/* Reviewer Routes */}
-      <Route path="/dashboard/reviewer">
-        {() => <ProtectedRoute component={ReviewerDashboard} allowedRoles={['reviewer']} />}
-      </Route>
-      <Route path="/dashboard/reviewer/:tab">
-        {() => <ProtectedRoute component={ReviewerDashboard} allowedRoles={['reviewer']} />}
-      </Route>
       <Route path="/reviews/:id">
-        {() => <ProtectedRoute component={ReviewForm} allowedRoles={['reviewer', 'editor', 'admin']} />}
+        <PathRedirect to="/reviews/1" />
       </Route>
 
-      {/* Admin Routes — each sub-path maps to AdminDashboard, which reads the URL */}
-      <Route path="/dashboard/admin">
-        {() => <ProtectedRoute component={AdminDashboard} allowedRoles={['admin']} />}
+      <Route path="/:locale">
+        {(params) => (isLocale(params.locale) ? <DefaultRedirect /> : <NotFound />)}
       </Route>
-      <Route path="/dashboard/admin/:section">
-        {() => <ProtectedRoute component={AdminDashboard} allowedRoles={['admin']} />}
+
+      <Route path="/:locale/login">
+        {(params) => (isLocale(params.locale) ? <Login /> : <NotFound />)}
+      </Route>
+
+      <Route path="/:locale/dashboard/author">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={AuthorDashboard} allowedRoles={["author"]} /> : <NotFound />
+        }
+      </Route>
+      <Route path="/:locale/dashboard/author/:tab">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={AuthorDashboard} allowedRoles={["author"]} /> : <NotFound />
+        }
+      </Route>
+      <Route path="/:locale/submissions/new">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={NewSubmissionWizard} allowedRoles={["author"]} /> : <NotFound />
+        }
+      </Route>
+
+      <Route path="/:locale/dashboard/editor">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={EditorDashboard} allowedRoles={["editor", "admin"]} /> : <NotFound />
+        }
+      </Route>
+      <Route path="/:locale/dashboard/editor/:tab">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={EditorDashboard} allowedRoles={["editor", "admin"]} /> : <NotFound />
+        }
+      </Route>
+
+      <Route path="/:locale/dashboard/reviewer">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={ReviewerDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
+        }
+      </Route>
+      <Route path="/:locale/dashboard/reviewer/:tab">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={ReviewerDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
+        }
+      </Route>
+      <Route path="/:locale/reviews/:id">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={ReviewForm} allowedRoles={["reviewer", "editor", "admin"]} /> : <NotFound />
+        }
+      </Route>
+
+      <Route path="/:locale/dashboard/admin">
+        {(params) => (isLocale(params.locale) ? <ProtectedRoute component={AdminDashboard} allowedRoles={["admin"]} /> : <NotFound />)}
+      </Route>
+      <Route path="/:locale/dashboard/admin/:section">
+        {(params) => (isLocale(params.locale) ? <ProtectedRoute component={AdminDashboard} allowedRoles={["admin"]} /> : <NotFound />)}
       </Route>
 
       <Route component={NotFound} />

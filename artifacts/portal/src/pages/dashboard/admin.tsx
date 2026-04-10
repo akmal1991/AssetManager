@@ -16,6 +16,7 @@ import {
   useCreateAdminUser,
   useDeleteAdminUser,
   useResetUserPassword,
+  useGetSubmissions,
   getGetAuditLogsQueryOptions,
   getGetEmailTemplatesQueryOptions,
 } from "@workspace/api-client-react";
@@ -31,8 +32,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { cn } from "@/lib/utils";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate, STATUS_COLORS, STATUS_LABELS, LITERATURE_TYPES } from "@/lib/utils";
+import { Link } from "wouter";
 
 /* ── helpers ── */
 function getSection(path: string) {
@@ -113,6 +114,7 @@ export default function AdminDashboard() {
   /* ── Data ── */
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetAdminStats();
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useGetUsers();
+  const { data: submissionsData, isLoading: submissionsLoading, refetch: refetchSubmissions } = useGetSubmissions({ limit: 200 });
   const { data: departments } = useGetDepartments();
   const { data: departmentsFull, refetch: refetchDepts } = useGetDepartments();
   const { data: directions, refetch: refetchDirs } = useGetScientificDirections();
@@ -312,6 +314,7 @@ export default function AdminDashboard() {
           <div>
             <h2 className="text-2xl font-serif font-bold text-primary">
               {section === "overview"        && "Statistika"}
+              {section === "submissions"     && "Ilmiy ishlar"}
               {section === "users"           && "👥 Foydalanuvchilar"}
               {section === "dictionaries"    && "⚙️ Lug'at Sozlamalari"}
               {section === "email-templates" && "📧 Email Shablonlari"}
@@ -320,6 +323,7 @@ export default function AdminDashboard() {
             </h2>
             <p className="text-muted-foreground text-sm mt-0.5">
               {section === "overview"        && "Tizimning umumiy holati va faoliyat statistikasi"}
+              {section === "submissions"     && "Mualliflar yuborgan ilmiy ishlarni ko'rish va jarayon boshqaruviga o'tish"}
               {section === "users"           && "Foydalanuvchilarni qo'shish, o'chirish, rollarni sozlash"}
               {section === "dictionaries"    && "Kafedralar va ilmiy yo'nalishlar ro'yxatini boshqarish"}
               {section === "email-templates" && "Avtomatik yuboriluvchi email xabarlarini sozlash"}
@@ -418,6 +422,73 @@ export default function AdminDashboard() {
         )}
 
         {/* ══════════ USER MANAGEMENT ══════════ */}
+        {section === "submissions" && (
+          <div className="animate-in fade-in-0 duration-200 space-y-4">
+            <Card className="overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-border bg-white flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold font-serif text-slate-800">Yuborilgan ilmiy ishlar</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Yangi arizalar bu yerda ko'rinadi. Ekspert tayinlash va qaror qabul qilish uchun admin sifatida muharrir jarayoniga ham o'tishingiz mumkin.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => { refetchSubmissions(); refetchStats(); }}>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Yangilash
+                  </Button>
+                  <Link href="/dashboard/editor">
+                    <Button size="sm" className="h-8 text-xs gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5" />
+                      Jarayonni boshqarish
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+
+              {submissionsLoading ? (
+                <div className="flex justify-center py-16"><LoadingSpinner /></div>
+              ) : !(submissionsData?.items?.length) ? (
+                <div className="p-12 text-center text-slate-400 text-sm">Hali ilmiy ishlar yuborilmagan.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider border-b border-border/70">
+                      <tr>
+                        <th className="px-5 py-3 font-semibold">Sarlavha</th>
+                        <th className="px-5 py-3 font-semibold hidden lg:table-cell">Muallif</th>
+                        <th className="px-5 py-3 font-semibold">Turi</th>
+                        <th className="px-5 py-3 font-semibold">Holati</th>
+                        <th className="px-5 py-3 font-semibold hidden md:table-cell">Sana</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {submissionsData.items.map((submission: any, idx: number) => (
+                        <tr key={submission.id} className={cn("hover:bg-slate-50/60 transition-colors", idx % 2 === 0 ? "bg-white" : "bg-slate-50/20")}>
+                          <td className="px-5 py-3.5">
+                            <p className="font-medium text-slate-800">{submission.title}</p>
+                            <p className="text-xs text-slate-400 mt-1">{submission.scientificDirection || "Yo'nalish ko'rsatilmagan"}</p>
+                          </td>
+                          <td className="px-5 py-3.5 hidden lg:table-cell text-slate-600">{submission.authorName || "Noma'lum"}</td>
+                          <td className="px-5 py-3.5 text-slate-600">
+                            {LITERATURE_TYPES[submission.literatureType as keyof typeof LITERATURE_TYPES] || submission.literatureType}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <Badge className={cn("rounded-full px-3 py-0.5 border", STATUS_COLORS[submission.status as keyof typeof STATUS_COLORS])}>
+                              {STATUS_LABELS[submission.status as keyof typeof STATUS_LABELS] || submission.status}
+                            </Badge>
+                          </td>
+                          <td className="px-5 py-3.5 hidden md:table-cell text-slate-400">{formatDate(submission.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
         {section === "users" && (
           <div className="animate-in fade-in-0 duration-200 space-y-4">
             {/* Role filter chips + Add button */}

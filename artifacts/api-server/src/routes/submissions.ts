@@ -10,7 +10,8 @@ import { logAction } from "../lib/audit.js";
 
 const router = Router();
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "/tmp/uploads";
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ?? path.resolve(process.cwd(), "uploads");
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -82,7 +83,11 @@ router.get("/", requireAuth, async (req, res) => {
     }
 
     const items = await (query as any).limit(limit).offset(offset);
-    const countResult = await db.select({ count: sql<number>`count(*)` }).from(submissionsTable);
+    let countQuery = db.select({ count: sql<number>`count(*)` }).from(submissionsTable);
+    if (conditions.length > 0) {
+      countQuery = countQuery.where(and(...conditions) as any) as any;
+    }
+    const countResult = await countQuery;
     const total = Number(countResult[0]?.count ?? 0);
 
     res.json({
@@ -99,18 +104,30 @@ router.get("/", requireAuth, async (req, res) => {
 router.post("/", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    const { title, abstract, keywords, language, departmentId, scientificDirection, literatureType } = req.body;
-    if (!title || !abstract || !scientificDirection || !literatureType) {
-      res.status(400).json({ error: "title, abstract, scientificDirection, literatureType required" });
-      return;
-    }
-    const inserted = await db.insert(submissionsTable).values({
+    const body = req.body ?? {};
+    const {
       title,
       abstract,
-      keywords: Array.isArray(keywords) ? keywords : [],
+      keywords,
+      language,
+      departmentId,
+      scientificDirection,
+      literatureType,
+    } = body;
+    if (!title || !abstract || !departmentId || !scientificDirection || !literatureType) {
+      res.status(400).json({ error: "title, abstract, departmentId, scientificDirection, literatureType required" });
+      return;
+    }
+    const normalizedKeywords = Array.isArray(keywords)
+      ? keywords.map((keyword) => String(keyword).trim()).filter(Boolean).slice(0, 10)
+      : [];
+    const inserted = await db.insert(submissionsTable).values({
+      title: String(title).trim(),
+      abstract: String(abstract).trim(),
+      keywords: normalizedKeywords,
       language: language ?? "uz",
       departmentId: departmentId ? Number(departmentId) : null,
-      scientificDirection,
+      scientificDirection: String(scientificDirection).trim(),
       literatureType,
       status: "submitted",
       authorId: user.id,

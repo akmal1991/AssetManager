@@ -1,52 +1,61 @@
-import { pgTable, serial, text, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable, departmentsTable } from "./users";
 
-export const submissionStatusEnum = pgEnum("submission_status", [
+export const submissionStatusValues = [
   "submitted", "under_review", "revision_required", "accepted", "rejected", "published"
-]);
+ ] as const;
 
-export const literatureTypeEnum = pgEnum("literature_type", [
+export const literatureTypeValues = [
   "darslik", "oquv_qollanma", "monografiya", "oquv_uslubiy_qollanma", "uslubiy_korsatma"
-]);
+ ] as const;
 
-export const docTypeEnum = pgEnum("doc_type", [
+export const docTypeValues = [
   "internal_review", "external_review", "plagiarism_report", "curriculum", "syllabus", "main_document"
-]);
+ ] as const;
 
-export const reviewStatusEnum = pgEnum("review_status", ["pending", "submitted"]);
+export const reviewStatusValues = ["pending", "submitted"] as const;
 
-export const verdictEnum = pgEnum("verdict", ["accept", "minor_revision", "major_revision", "reject"]);
+export const verdictValues = ["accept", "minor_revision", "major_revision", "reject"] as const;
 
-export const submissionsTable = pgTable("submissions", {
-  id: serial("id").primaryKey(),
+const timestampDefault = sql`(unixepoch() * 1000)`;
+
+export const submissionsTable = sqliteTable("submissions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   title: text("title").notNull(),
   abstract: text("abstract").notNull(),
-  keywords: text("keywords").array().notNull().default([]),
+  keywords: text("keywords", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
   language: text("language").notNull().default("uz"),
   departmentId: integer("department_id").references(() => departmentsTable.id),
   scientificDirection: text("scientific_direction").notNull(),
-  literatureType: literatureTypeEnum("literature_type").notNull(),
-  status: submissionStatusEnum("status").notNull().default("submitted"),
+  literatureType: text("literature_type", { enum: literatureTypeValues }).notNull(),
+  status: text("status", { enum: submissionStatusValues }).notNull().default("submitted"),
   authorId: integer("author_id").notNull().references(() => usersTable.id),
   editorNotes: text("editor_notes"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(timestampDefault),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(timestampDefault),
 });
 
-export const documentsTable = pgTable("documents", {
-  id: serial("id").primaryKey(),
+export const documentsTable = sqliteTable("documents", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   submissionId: integer("submission_id").notNull().references(() => submissionsTable.id),
-  docType: docTypeEnum("doc_type").notNull(),
+  docType: text("doc_type", { enum: docTypeValues }).notNull(),
   fileName: text("file_name").notNull(),
   fileSize: integer("file_size"),
   filePath: text("file_path").notNull(),
-  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(timestampDefault),
 });
 
-export const reviewsTable = pgTable("reviews", {
-  id: serial("id").primaryKey(),
+export const reviewsTable = sqliteTable("reviews", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   submissionId: integer("submission_id").notNull().references(() => submissionsTable.id),
   reviewerId: integer("reviewer_id").notNull().references(() => usersTable.id),
   scientificSignificance: integer("scientific_significance"),
@@ -55,10 +64,12 @@ export const reviewsTable = pgTable("reviews", {
   originality: integer("originality"),
   commentsForAuthor: text("comments_for_author"),
   commentsForEditor: text("comments_for_editor"),
-  verdict: verdictEnum("verdict"),
-  status: reviewStatusEnum("status").notNull().default("pending"),
-  assignedAt: timestamp("assigned_at").notNull().defaultNow(),
-  submittedAt: timestamp("submitted_at"),
+  verdict: text("verdict", { enum: verdictValues }),
+  status: text("status", { enum: reviewStatusValues }).notNull().default("pending"),
+  assignedAt: integer("assigned_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(timestampDefault),
+  submittedAt: integer("submitted_at", { mode: "timestamp_ms" }),
 });
 
 export const insertSubmissionSchema = createInsertSchema(submissionsTable).omit({ id: true, createdAt: true, updatedAt: true });

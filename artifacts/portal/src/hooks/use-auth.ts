@@ -1,8 +1,7 @@
 import { create } from "zustand";
-import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, User } from "@workspace/api-client-react";
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { getLocaleFromPath, withLocale } from "@/lib/i18n";
 
 interface AuthState {
   token: string | null;
@@ -21,21 +20,21 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token });
   },
   logout: () => {
+    const locale = getLocaleFromPath(window.location.pathname);
     localStorage.removeItem("portal_token");
     set({ token: null });
-    window.location.href = "/login";
+    window.location.href = withLocale("/login", locale);
   },
 }));
 
 export function useAuth() {
   const { token, setToken, logout } = useAuthStore();
-  const [, setLocation] = useLocation();
 
-  const { data: user, isLoading, isError, error } = useGetMe({
+  const { data: user, isLoading, isError } = useGetMe({
     query: {
       enabled: !!token,
       retry: false,
-    }
+    },
   });
 
   useEffect(() => {
