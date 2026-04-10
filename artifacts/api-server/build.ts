@@ -62,7 +62,7 @@ async function buildAll() {
     target: "node20",
     outfile: path.resolve(distDir, "index.js"),
     banner: {
-      js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`,
+      js: `import { createRequire } from 'module'; import { fileURLToPath as __fup } from 'url'; import { dirname as __dn } from 'path'; const require = createRequire(import.meta.url); const __filename = __fup(import.meta.url); const __dirname = __dn(__filename);`,
     },
     define: {
       "process.env.NODE_ENV": '"production"',
