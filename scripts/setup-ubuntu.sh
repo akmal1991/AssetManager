@@ -9,7 +9,7 @@ echo "========================================="
 
 # 1. Update system and install basic dependencies
 echo "[1/6] Updating system and installing build tools..."
-sudo apt-update -y
+sudo apt update -y
 sudo apt install -y curl git build-essential python3
 
 # 2. Install Node.js 20 (if not installed)
@@ -28,17 +28,22 @@ sudo npm install -g pnpm pm2 tsx
 # 4. Install project dependencies
 echo "[4/6] Installing project dependencies..."
 pnpm install --ignore-scripts
-# Rebuild better-sqlite3 specifically for the Ubuntu architecture
-npm run install --prefix node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3
 
 # 5. Build the application (Frontend & Backend)
 echo "[5/6] Building the application..."
 pnpm run build
 
+# 5.1 Update database schema (requires DATABASE_URL)
+if [ -z "$DATABASE_URL" ]; then
+    echo "DATABASE_URL is not set. Please export DATABASE_URL before running this script."
+    exit 1
+fi
+pnpm --filter @workspace/db run push
+
 # 6. Start or Restart the application with PM2
 echo "[6/6] Starting the application with PM2..."
-pm2 stop asset-manager || true
-pm2 start artifacts/api-server/src/index.ts --interpreter tsx --name asset-manager
+pm2 stop assetmanager || true
+pm2 start artifacts/api-server/dist/index.js --name assetmanager
 
 # Save PM2 list so it restarts on server reboot
 pm2 save

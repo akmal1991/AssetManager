@@ -7,7 +7,7 @@ echo "Starting deployment workflow..."
 echo "Updating system packages..."
 sudo apt update && sudo apt upgrade -y
 
-# 2. Install build essentials (needed for better-sqlite3)
+# 2. Install build essentials
 echo "Installing build tools..."
 sudo apt install -y build-essential python3 curl git
 
@@ -40,19 +40,25 @@ pnpm install
 echo "Building the application..."
 pnpm run build
 
-# 8. Start or restart the application using PM2
+# 8. Update database schema
+if [ -z "$DATABASE_URL" ]; then
+    echo "DATABASE_URL is not set. Please export DATABASE_URL before running this script."
+    exit 1
+fi
+pnpm --filter @workspace/db run push
+
+# 9. Start or restart the application using PM2
 echo "Starting the application with PM2..."
 # We run the compiled API server directly using tsx or node if it was compiled.
 # Wait, let's use the local tsx via npx or pnpm to run the index.ts
-pm2 describe asset-manager > /dev/null 2>&1
+pm2 describe assetmanager > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "Restarting existing PM2 process..."
-    pm2 restart asset-manager
+    pm2 restart assetmanager
 else
     echo "Starting new PM2 process..."
-    # Start the unified server on port 80 (requires sudo or port forwarding, let's stick to 8080 or use authbind)
-    # Using default port 8080 for now
-    PORT=8080 pm2 start "pnpm --filter @workspace/api-server run dev" --name "asset-manager"
+    # Start the compiled server on port 8080
+    PORT=8080 pm2 start "node artifacts/api-server/dist/index.js" --name "assetmanager"
 fi
 
 # Save PM2 process list so it starts on boot

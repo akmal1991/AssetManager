@@ -11,12 +11,11 @@ The UI is primarily in Uzbek (Latin script) and follows a professional academic 
 - Frontend: React 19 + Vite
 - Backend: Express 5
 - ORM: Drizzle ORM
-- Local database: SQLite
-- Database file: `local.db`
+- Local database: PostgreSQL
 - Auth: JWT
 - File uploads: Multer
 
-The project originally targeted PostgreSQL, but this workspace is now configured to run locally with SQLite for development.
+The project uses PostgreSQL locally and in production.
 
 ## Project Structure
 
@@ -32,7 +31,6 @@ The project originally targeted PostgreSQL, but this workspace is now configured
 |   `-- db/              # Drizzle ORM schemas, DB connection, init/seed logic
 |-- attached_assets/     # Specs and reference docs
 |-- scripts/
-|-- local.db             # Local SQLite database (generated locally)
 |-- pnpm-workspace.yaml
 `-- package.json
 ```
@@ -106,13 +104,12 @@ Main DB files:
 
 Local behavior:
 
-- `local.db` is created automatically
-- schema is created automatically on API startup
+- schema is created via `pnpm --filter @workspace/db run push`
 - seed data is inserted automatically on first run
 
 ## Seeded Local Data
 
-On first startup, the local SQLite database is seeded with:
+On first startup, the local PostgreSQL database is seeded with:
 
 - `1` admin user
 - `32` departments
@@ -218,13 +215,12 @@ If you are on Windows and the repo preinstall shell script fails because `sh` is
 
 ```powershell
 corepack pnpm install --ignore-scripts
-npm run install --prefix node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3
 ```
+ 
+Set your database connection string:
 
-If your machine has a newer system Node and the local SQLite module fails to load, this workspace also supports a repo-local Node 20 binary at:
-
-```text
-.local/node20/node.exe
+```powershell
+$env:DATABASE_URL = "postgresql://USER:PASSWORD@HOST:5432/assetmanager"
 ```
 
 ### 2. Start the API
@@ -241,11 +237,13 @@ Or with `pnpm`:
 corepack pnpm --filter @workspace/api-server run dev
 ```
 
-The API will:
+Before first API run, push the schema:
 
-- create `local.db` if it does not exist
-- create tables
-- seed the local data on first run
+```powershell
+corepack pnpm --filter @workspace/db run push
+```
+
+The API will seed initial data on first run.
 
 ### 3. Start the frontend
 
@@ -285,7 +283,7 @@ corepack pnpm --filter @workspace/db run push
 
 ## Notes
 
-- `local.db`, `uploads/`, and SQLite journal files are ignored by Git.
+- `uploads/` is ignored by Git.
 - Vite is configured with local defaults so `PORT` and `BASE_PATH` are not required for local development.
 - The API defaults to port `8080` if `PORT` is not provided.
 - The frontend defaults to port `5173` if `PORT` is not provided.
