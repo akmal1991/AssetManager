@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ArrowLeft, Save, Send, FileText, User, ClipboardCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button, Card, Textarea, PageTransition, LoadingSpinner, Input, Badge } from "@/components/ui/shared";
@@ -205,12 +205,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function ReviewForm() {
-  const [, params] = useRoute("/reviews/:id");
-  const reviewId = Number(params?.id);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { locale, t, withLocale } = useLocale();
+  const { locale, t, withLocale, stripLocale, location } = useLocale();
   const { user } = useAuth();
+  const reviewId = React.useMemo(() => {
+    const [, , id] = stripLocale(location).split("/");
+    return Number(id);
+  }, [location, stripLocale]);
 
   const { data: review, isLoading } = useGetReview(reviewId);
   const submitMutation = useSubmitReview();
@@ -327,6 +329,24 @@ export default function ReviewForm() {
       });
     }
   };
+
+  if (!Number.isInteger(reviewId) || reviewId <= 0) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-3xl mx-auto py-12">
+          <Card className="p-8 text-center border border-red-100 bg-red-50">
+            <FileText className="h-10 w-10 text-red-400 mx-auto mb-3" />
+            <h2 className="text-xl font-bold text-red-700 mb-2">
+              {t({ uz: "Xulosa topilmadi", en: "Conclusion not found", ru: "Заключение не найдено" })}
+            </h2>
+            <p className="text-red-600">
+              {t({ uz: "Ekspert xulosasi havolasi noto'g'ri.", en: "The expert conclusion link is invalid.", ru: "Ссылка на экспертное заключение недействительна." })}
+            </p>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (isLoading || !reviewData) {
     return <DashboardLayout><LoadingSpinner /></DashboardLayout>;

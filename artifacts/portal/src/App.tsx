@@ -120,6 +120,18 @@ function PathRedirect({ to }: { to: string }) {
   return <LoadingScreen />;
 }
 
+function ReviewPathRedirect() {
+  const [location, setLocation] = useLocation();
+  const locale = getLocaleFromPath(location);
+  const reviewPath = location.match(/^\/reviews\/([^/?#]+)/)?.[0] ?? "/reviews";
+
+  useEffect(() => {
+    setLocation(withLocale(reviewPath, locale));
+  }, [locale, reviewPath, setLocation]);
+
+  return <LoadingScreen />;
+}
+
 function DefaultRedirect() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const [location, setLocation] = useLocation();
@@ -162,7 +174,7 @@ function Router() {
       </Route>
 
       <Route path="/reviews/:id">
-        <PathRedirect to="/reviews/1" />
+        <ReviewPathRedirect />
       </Route>
 
       <Route path="/:locale">
