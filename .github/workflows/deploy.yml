@@ -3,7 +3,7 @@ name: Deploy to Production
 on:
   push:
     branches:
-      - master  # Auto-deploy when pushing to master branch
+      - master
 
 jobs:
   deploy:
@@ -18,35 +18,30 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-
-            # The path where you cloned the repository on your VPS
             cd /var/www/AssetManager
 
-            # Pull the latest changes from GitHub
             git pull origin master
 
-            # Install dependencies (using pnpm as per project spec)
             corepack enable pnpm
             pnpm install
 
-            # Update database schema
             export DATABASE_URL="${{ secrets.DATABASE_URL }}"
             pnpm --filter @workspace/db run push
 
-            # Build the frontend and API server
             pnpm run typecheck:libs
             pnpm --filter @workspace/api-server run build
             pnpm --filter @workspace/portal run build
 
-            # Restart the unified PM2 process
-            pm2 restart assetmanager
+            pm2 delete assetmanager || true
+            DATABASE_URL="${{ secrets.DATABASE_URL }}" PORT=80 pm2 start "node artifacts/api-server/dist/index.js" --name assetmanager
+            pm2 save
 
             pm2 status
 
       - name: Deployment Successful
         if: success()
-        run: echo "✅ Deployment successful! The server is running the latest code."
+        run: echo "✅ Deployment successful!"
 
       - name: Deployment Failed
         if: failure()
-        run: echo "❌ Deployment failed - Please check the Actions logs."
+        run: echo "❌ Deployment failed - check Actions logs."
