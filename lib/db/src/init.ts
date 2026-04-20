@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { count } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "./index";
 import {
   auditLogsTable,
@@ -16,10 +17,35 @@ import {
 
 let initialized = false;
 
+async function ensureSchemaCompatibility() {
+  await db.execute(sql`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS phone text,
+      ADD COLUMN IF NOT EXISTS expert_organization text,
+      ADD COLUMN IF NOT EXISTS expert_bio text,
+      ADD COLUMN IF NOT EXISTS expert_specialties jsonb NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS expert_is_active boolean NOT NULL DEFAULT false
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE reviews
+      ADD COLUMN IF NOT EXISTS conclusion_form jsonb NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS classification text
+  `);
+
+  await db.execute(sql`
+    UPDATE users
+    SET expert_is_active = true
+    WHERE role = 'reviewer' AND expert_is_active = false
+  `);
+}
+
 export async function initializeDatabase() {
   if (initialized) {
     return;
   }
+
+  await ensureSchemaCompatibility();
 
   const [{ value: departmentsCount }] = await db
     .select({ value: count() })

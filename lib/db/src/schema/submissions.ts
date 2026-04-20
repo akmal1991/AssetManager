@@ -18,6 +18,7 @@ export const docTypeValues = [
 export const reviewStatusValues = ["pending", "submitted"] as const;
 
 export const verdictValues = ["accept", "minor_revision", "major_revision", "reject"] as const;
+export const reviewClassificationValues = ["positive", "negative"] as const;
 
 export const submissionsTable = pgTable("submissions", {
   id: serial("id").primaryKey(),
@@ -53,9 +54,15 @@ export const reviewsTable = pgTable("reviews", {
   methodology: integer("methodology"),
   structureClarity: integer("structure_clarity"),
   originality: integer("originality"),
+  conclusionSummary: text("conclusion_summary"),
+  conclusionForm: jsonb("conclusion_form").$type<Record<string, unknown>>().notNull().default({}),
+  strengths: text("strengths"),
+  weaknesses: text("weaknesses"),
+  recommendation: text("recommendation"),
   commentsForAuthor: text("comments_for_author"),
   commentsForEditor: text("comments_for_editor"),
   verdict: text("verdict").$type<typeof verdictValues[number]>(),
+  classification: text("classification").$type<typeof reviewClassificationValues[number]>(),
   status: text("status").$type<typeof reviewStatusValues[number]>().notNull().default("pending"),
   assignedAt: timestamp("assigned_at").notNull().defaultNow(),
   submittedAt: timestamp("submitted_at"),

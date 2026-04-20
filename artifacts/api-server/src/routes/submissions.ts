@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { db } from "@workspace/db";
 import { submissionsTable, documentsTable, reviewsTable, usersTable, departmentsTable } from "@workspace/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { logAction } from "../lib/audit.js";
 
@@ -29,6 +29,9 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
+const VALID_STATUSES = new Set(["submitted", "under_review", "revision_required", "accepted", "rejected", "published"]);
+const VALID_DOC_TYPES = new Set(["internal_review", "external_review", "plagiarism_report", "curriculum", "syllabus", "main_document"]);
+const FINAL_STATUSES = new Set(["accepted", "rejected", "published"]);
 
 function safeUnlink(filePath: string | null | undefined) {
   if (!filePath) return;
@@ -50,8 +53,54 @@ async function ensureSubmissionAccess(req: any, submissionId: number) {
     return { error: { status: 404, message: "Submission not found" } };
   }
 
-  const canManage = user.role === "admin" || user.role === "editor" || current.authorId === user.id;
+  const canManage = user.role === "admin" || user.role === "editor" || user.role === "publisher" || current.authorId === user.id;
   if (!canManage) {
+    return { error: { status: 403, message: "Forbidden" } };
+  }
+
+  return { submission: current };
+}
+
+async function ensureSubmissionViewAccess(req: any, submissionId: number) {
+  const user = req.user;
+  const submission = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId)).limit(1);
+  const current = submission[0];
+
+  if (!current) {
+    return { error: { status: 404, message: "Submission not found" } };
+  }
+
+  if (user.role === "admin" || user.role === "editor" || user.role === "publisher" || current.authorId === user.id) {
+    return { submission: current };
+  }
+
+  if (user.role === "reviewer") {
+    const assigned = await db.select({ id: reviewsTable.id }).from(reviewsTable)
+      .where(and(eq(reviewsTable.submissionId, submissionId), eq(reviewsTable.reviewerId, user.id)))
+      .limit(1);
+    if (assigned[0]) {
+      return { submission: current };
+    }
+  }
+
+  return { error: { status: 403, message: "Forbidden" } };
+}
+
+async function ensureFileMutationAccess(req: any, submissionId: number) {
+  const user = req.user;
+  const submission = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId)).limit(1);
+  const current = submission[0];
+
+  if (!current) {
+    return { error: { status: 404, message: "Submission not found" } };
+  }
+
+  const isOwnerEditable =
+    current.authorId === user.id &&
+    (current.status === "submitted" || current.status === "revision_required");
+  const canManageFiles = user.role === "admin" || user.role === "editor" || user.role === "publisher" || isOwnerEditable;
+
+  if (!canManageFiles) {
     return { error: { status: 403, message: "Forbidden" } };
   }
 
@@ -78,6 +127,26 @@ function formatSub(row: any) {
     ...row.submission,
     authorName: row.authorName,
     departmentName: row.deptName,
+  };
+}
+
+function buildReviewSummary(reviews: Array<any>) {
+  const submitted = reviews.filter((review) => review.status === "submitted");
+  const latestSubmitted = submitted
+    .filter((review) => review.submittedAt)
+    .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())[0];
+
+  return {
+    totalAssigned: reviews.length,
+    pendingCount: reviews.filter((review) => review.status === "pending").length,
+    submittedCount: submitted.length,
+    positiveCount: submitted.filter((review) => review.classification === "positive").length,
+    negativeCount: submitted.filter((review) => review.classification === "negative").length,
+    assignedExpertNames: reviews.map((review) => review.reviewerName).filter(Boolean),
+    latestReviewId: latestSubmitted?.id ?? null,
+    latestVerdict: latestSubmitted?.verdict ?? null,
+    latestClassification: latestSubmitted?.classification ?? null,
+    latestSubmittedAt: latestSubmitted?.submittedAt ?? null,
   };
 }
 
@@ -111,6 +180,21 @@ router.get("/", requireAuth, async (req, res) => {
     }
 
     const items = await (query as any).limit(limit).offset(offset);
+    const submissionIds = items.map((item: any) => item.submission.id);
+    const reviews = submissionIds.length > 0
+      ? await db
+        .select({ review: reviewsTable, reviewerName: usersTable.fullName })
+        .from(reviewsTable)
+        .leftJoin(usersTable, eq(reviewsTable.reviewerId, usersTable.id))
+        .where(inArray(reviewsTable.submissionId, submissionIds))
+      : [];
+    const reviewMap = new Map<number, Array<any>>();
+    for (const row of reviews) {
+      const review = { ...row.review, reviewerName: row.reviewerName };
+      const bucket = reviewMap.get(review.submissionId) ?? [];
+      bucket.push(review);
+      reviewMap.set(review.submissionId, bucket);
+    }
     let countQuery = db.select({ count: sql<number>`count(*)` }).from(submissionsTable);
     if (conditions.length > 0) {
       countQuery = countQuery.where(and(...conditions) as any) as any;
@@ -119,7 +203,10 @@ router.get("/", requireAuth, async (req, res) => {
     const total = Number(countResult[0]?.count ?? 0);
 
     res.json({
-      items: items.map(formatSub),
+      items: items.map((item: any) => ({
+        ...formatSub(item),
+        reviewSummary: buildReviewSummary(reviewMap.get(item.submission.id) ?? []),
+      })),
       total,
       page,
       limit,
@@ -132,6 +219,10 @@ router.get("/", requireAuth, async (req, res) => {
 router.post("/", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
+    if (user.role !== "author") {
+      res.status(403).json({ error: "Only authors can create submissions" });
+      return;
+    }
     const body = req.body ?? {};
     const {
       title,
@@ -144,6 +235,14 @@ router.post("/", requireAuth, async (req, res) => {
     } = body;
     if (!title || !abstract || !departmentId || !scientificDirection || !literatureType) {
       res.status(400).json({ error: "title, abstract, departmentId, scientificDirection, literatureType required" });
+      return;
+    }
+    if (!["uz", "en", "ru"].includes(String(language ?? "uz"))) {
+      res.status(400).json({ error: "Unsupported language" });
+      return;
+    }
+    if (!["darslik", "oquv_qollanma", "monografiya", "oquv_uslubiy_qollanma", "uslubiy_korsatma"].includes(String(literatureType))) {
+      res.status(400).json({ error: "Invalid literatureType" });
       return;
     }
     const normalizedKeywords = Array.isArray(keywords)
@@ -172,6 +271,11 @@ router.post("/", requireAuth, async (req, res) => {
 router.get("/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const access = await ensureSubmissionViewAccess(req as any, id);
+    if ("error" in access) {
+      res.status(access.error.status).json({ error: access.error.message });
+      return;
+    }
     const row = await getSubmissionWithDetails(id);
     if (!row) {
       res.status(404).json({ error: "Not found" });
@@ -187,17 +291,31 @@ router.get("/:id", requireAuth, async (req, res) => {
     res.json({
       ...formatSub(row),
       documents: docs,
-      reviews: reviews.map(r => ({ ...r.review, reviewerName: r.reviewerName })),
+      reviews: reviews.map(r => ({ ...r.review, expertId: r.review.reviewerId, expertName: r.reviewerName, reviewerName: r.reviewerName })),
+      reviewSummary: buildReviewSummary(reviews.map((review) => ({ ...review.review, reviewerName: review.reviewerName }))),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.patch("/:id/status", requireAuth, requireRole("editor", "admin"), async (req, res) => {
+router.patch("/:id/status", requireAuth, requireRole("editor", "publisher", "admin"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { status, notes } = req.body;
+    if (!VALID_STATUSES.has(String(status))) {
+      res.status(400).json({ error: "Invalid status" });
+      return;
+    }
+    const current = await db.select().from(submissionsTable).where(eq(submissionsTable.id, id)).limit(1);
+    if (!current[0]) {
+      res.status(404).json({ error: "Submission not found" });
+      return;
+    }
+    if (status === "published" && current[0].status !== "accepted") {
+      res.status(400).json({ error: "Only accepted submissions can be published" });
+      return;
+    }
     await db.update(submissionsTable)
       .set({ status, editorNotes: notes ?? null, updatedAt: new Date() })
       .where(eq(submissionsTable.id, id));
@@ -209,27 +327,59 @@ router.patch("/:id/status", requireAuth, requireRole("editor", "admin"), async (
   }
 });
 
-router.post("/:id/assign", requireAuth, requireRole("editor", "admin"), async (req, res) => {
+router.post("/:id/assign", requireAuth, requireRole("editor", "publisher", "admin"), async (req, res) => {
   try {
     const submissionId = parseInt(req.params.id);
-    const { reviewerId } = req.body;
-    if (!reviewerId) {
-      res.status(400).json({ error: "reviewerId required" });
+    const body = req.body ?? {};
+    const expertId = body.expertId ?? body.reviewerId;
+    if (!expertId) {
+      res.status(400).json({ error: "expertId required" });
+      return;
+    }
+    const current = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId)).limit(1);
+    if (!current[0]) {
+      res.status(404).json({ error: "Submission not found" });
+      return;
+    }
+    if (FINAL_STATUSES.has(current[0].status)) {
+      res.status(400).json({ error: "Cannot assign an expert to a finalized submission" });
+      return;
+    }
+    const numericReviewerId = Number(expertId);
+    if (!Number.isInteger(numericReviewerId)) {
+      res.status(400).json({ error: "Invalid expertId" });
+      return;
+    }
+    const reviewer = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, numericReviewerId), eq(usersTable.role, "reviewer"), eq(usersTable.expertIsActive, true)))
+      .limit(1);
+    if (!reviewer[0]) {
+      res.status(400).json({ error: "Active expert not found" });
       return;
     }
     const existing = await db.select().from(reviewsTable)
-      .where(and(eq(reviewsTable.submissionId, submissionId), eq(reviewsTable.reviewerId, reviewerId)))
+      .where(and(eq(reviewsTable.submissionId, submissionId), eq(reviewsTable.reviewerId, numericReviewerId)))
       .limit(1);
     if (existing[0]) {
+      if (current[0].status === "submitted") {
+        await db.update(submissionsTable)
+          .set({ status: "under_review", updatedAt: new Date() })
+          .where(eq(submissionsTable.id, submissionId));
+      }
       res.json(existing[0]);
       return;
     }
     const inserted = await db.insert(reviewsTable).values({
       submissionId,
-      reviewerId: Number(reviewerId),
+      reviewerId: numericReviewerId,
       status: "pending",
     }).returning();
     await db.update(submissionsTable).set({ status: "under_review", updatedAt: new Date() }).where(eq(submissionsTable.id, submissionId));
+    await logAction(req, "expert_assigned", {
+      entityType: "submission",
+      entityId: submissionId,
+      detail: `Expert assigned: ${reviewer[0].fullName} <${reviewer[0].email}>`,
+    });
     res.json(inserted[0]);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -245,7 +395,19 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
     const submissionId = parseInt(req.params.id);
     const { docType } = req.body;
     if (!docType) {
+      safeUnlink(req.file.path);
       res.status(400).json({ error: "docType required" });
+      return;
+    }
+    if (!VALID_DOC_TYPES.has(String(docType))) {
+      safeUnlink(req.file.path);
+      res.status(400).json({ error: "Invalid docType" });
+      return;
+    }
+    const access = await ensureFileMutationAccess(req as any, submissionId);
+    if ("error" in access) {
+      safeUnlink(req.file.path);
+      res.status(access.error.status).json({ error: access.error.message });
       return;
     }
     const existing = await db.select().from(documentsTable)
@@ -278,7 +440,7 @@ router.delete("/:id/documents/:documentId", requireAuth, async (req, res) => {
     const submissionId = parseInt(req.params.id);
     const documentId = parseInt(req.params.documentId);
 
-    const access = await ensureSubmissionAccess(req as any, submissionId);
+    const access = await ensureFileMutationAccess(req as any, submissionId);
     if ("error" in access) {
       res.status(access.error.status).json({ error: access.error.message });
       return;
@@ -311,6 +473,14 @@ router.delete("/:id", requireAuth, async (req, res) => {
     const access = await ensureSubmissionAccess(req as any, submissionId);
     if ("error" in access) {
       res.status(access.error.status).json({ error: access.error.message });
+      return;
+    }
+    const user = (req as any).user;
+    const canDelete =
+      user.role === "admin" ||
+      (access.submission.authorId === user.id && ["submitted", "revision_required"].includes(access.submission.status));
+    if (!canDelete) {
+      res.status(403).json({ error: "Only admins or the owning author before final processing can delete submissions" });
       return;
     }
 

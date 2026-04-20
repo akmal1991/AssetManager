@@ -30,6 +30,7 @@ const ROLE_COLORS: Record<string, string> = {
   author: "bg-blue-500/20 text-blue-200 border-blue-400/30",
   editor: "bg-violet-500/20 text-violet-200 border-violet-400/30",
   reviewer: "bg-amber-500/20 text-amber-200 border-amber-400/30",
+  publisher: "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
   admin: "bg-red-500/20 text-red-200 border-red-400/30",
 };
 
@@ -48,16 +49,27 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     ],
     editor: [
       { href: "/dashboard/editor", label: t({ uz: "Arizalar navbati", en: "Submission queue", ru: "Очередь заявок" }), icon: Inbox },
-      { href: "/dashboard/editor/reviewers", label: t({ uz: "Taqrizchilar bazasi", en: "Reviewer pool", ru: "База рецензентов" }), icon: Users },
+      { href: "/dashboard/editor/experts", label: t({ uz: "Ekspertlar ro'yxati", en: "Experts list", ru: "Список экспертов" }), icon: Users },
+      { href: "/dashboard/editor/positive", label: t({ uz: "Ijobiy xulosalar", en: "Positive expert conclusions", ru: "Положительные экспертные заключения" }), icon: CheckSquare },
+      { href: "/dashboard/editor/negative", label: t({ uz: "Salbiy xulosalar", en: "Negative expert conclusions", ru: "Отрицательные экспертные заключения" }), icon: ShieldCheck },
       { href: "/dashboard/editor/decisions", label: t({ uz: "Nashr qarorlari", en: "Publishing decisions", ru: "Издательские решения" }), icon: CheckSquare },
+    ],
+    publisher: [
+      { href: "/dashboard/publisher", label: t({ uz: "Nashr navbati", en: "Publishing queue", ru: "Очередь публикации" }), icon: Inbox },
+      { href: "/dashboard/publisher/experts", label: t({ uz: "Ekspertlar ro'yxati", en: "Experts list", ru: "Список экспертов" }), icon: Users },
+      { href: "/dashboard/publisher/positive", label: t({ uz: "Ijobiy xulosalar", en: "Positive expert conclusions", ru: "Положительные экспертные заключения" }), icon: CheckSquare },
+      { href: "/dashboard/publisher/negative", label: t({ uz: "Salbiy xulosalar", en: "Negative expert conclusions", ru: "Отрицательные экспертные заключения" }), icon: ShieldCheck },
+      { href: "/dashboard/publisher/decisions", label: t({ uz: "Nashr qarorlari", en: "Publishing decisions", ru: "Издательские решения" }), icon: CheckSquare },
     ],
     reviewer: [
       { href: "/dashboard/reviewer", label: t({ uz: "Topshiriqlar", en: "Assignments", ru: "Задания" }), icon: ClipboardList },
-      { href: "/dashboard/reviewer/history", label: t({ uz: "Taqrizlar tarixi", en: "Review history", ru: "История рецензий" }), icon: History },
+      { href: "/dashboard/reviewer/experts", label: t({ uz: "Ekspertlar ro'yxati", en: "Experts list", ru: "Список экспертов" }), icon: Users },
+      { href: "/dashboard/reviewer/history", label: t({ uz: "Xulosalar tarixi", en: "Conclusion history", ru: "История заключений" }), icon: History },
     ],
     admin: [
       { href: "/dashboard/admin", label: t({ uz: "Statistika", en: "Statistics", ru: "Статистика" }), icon: LayoutDashboard, exact: true },
       { href: "/dashboard/admin/submissions", label: t({ uz: "Ilmiy ishlar", en: "Scientific works", ru: "Научные работы" }), icon: FileText },
+      { href: "/dashboard/admin/experts", label: t({ uz: "Ekspertlar ro'yxati", en: "Experts list", ru: "Список экспертов" }), icon: Users },
       { href: "/dashboard/editor", label: t({ uz: "Jarayon boshqaruvi", en: "Workflow management", ru: "Управление процессом" }), icon: Inbox },
       { href: "/dashboard/admin/users", label: t({ uz: "Foydalanuvchilar", en: "Users", ru: "Пользователи" }), icon: Users },
       { href: "/dashboard/admin/dictionaries", label: t({ uz: "Lug'at sozlamalari", en: "Dictionaries", ru: "Справочники" }), icon: Settings2 },
@@ -67,8 +79,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     ],
   } as const;
 
-  const links = roleLinks[user.role as keyof typeof roleLinks] || [];
-
+  const links = (roleLinks[user.role as keyof typeof roleLinks] || []).map((link) => ({
+    ...link,
+    href: link.href.replace("/dashboard/reviewer", "/dashboard/expert"),
+  }));
   const currentPath = stripLocale(location);
   const brandTitle = t({ uz: "Ilmiy Nashr Portali", en: "Scientific Publishing Portal", ru: "Портал научных изданий" });
   const brandSubtitle = t({ uz: "Akademik tizim", en: "Academic system", ru: "Академическая система" });

@@ -1,18 +1,37 @@
 import React from "react";
+import { Link } from "wouter";
+import { PlusCircle, FileText, CheckCircle, Clock, AlertCircle, ArrowRight, BookOpen, ClipboardCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { useGetSubmissions } from "@workspace/api-client-react";
 import { Button, Card, Badge, PageTransition } from "@/components/ui/shared";
-import { PlusCircle, FileText, CheckCircle, Clock, AlertCircle, ArrowRight, BookOpen } from "lucide-react";
-import { Link } from "wouter";
 import { STATUS_COLORS, formatDate, getLocalizedLiteratureType, getLocalizedStatusLabel } from "@/lib/utils";
 import { useLocale } from "@/lib/i18n";
+
+function getReviewSummaryText(summary: any, locale: "uz" | "en" | "ru") {
+  if (!summary || summary.totalAssigned === 0) {
+    return { uz: "Ekspert hali tayinlanmagan", en: "No expert assigned yet", ru: "Эксперт пока не назначен" }[locale];
+  }
+  if (summary.pendingCount > 0) {
+    return {
+      uz: `${summary.pendingCount} ta ekspert xulosasi kutilmoqda`,
+      en: `${summary.pendingCount} expert conclusions pending`,
+      ru: `Ожидается ${summary.pendingCount} экспертных заключений`,
+    }[locale];
+  }
+  if (summary.latestClassification === "positive") {
+    return { uz: "Oxirgi ekspert xulosasi ijobiy", en: "Latest expert conclusion is positive", ru: "Последнее экспертное заключение положительное" }[locale];
+  }
+  if (summary.latestClassification === "negative") {
+    return { uz: "Oxirgi ekspert xulosasi salbiy", en: "Latest expert conclusion is negative", ru: "Последнее экспертное заключение отрицательное" }[locale];
+  }
+  return { uz: "Ekspert xulosasi tayyorlanmoqda", en: "Expert conclusion is in progress", ru: "Экспертное заключение готовится" }[locale];
+}
 
 export default function AuthorDashboard() {
   const { data, isLoading } = useGetSubmissions({ limit: 50 });
   const { locale, t, withLocale } = useLocale();
 
   const submissions = data?.items || [];
-
   const stats = {
     total: submissions.length,
     underReview: submissions.filter((submission) => ["submitted", "under_review"].includes(submission.status)).length,
@@ -30,9 +49,9 @@ export default function AuthorDashboard() {
             </h2>
             <p className="text-muted-foreground mt-1">
               {t({
-                uz: "Ilmiy ishlaringiz holatini kuzating va yangi ishlarni yuboring.",
-                en: "Track the status of your scientific works and submit new ones.",
-                ru: "Отслеживайте статус своих научных работ и отправляйте новые.",
+                uz: "Ilmiy ishlaringiz holatini kuzating va ekspert xulosalarini ko'ring.",
+                en: "Track your scientific works and view expert conclusions.",
+                ru: "Отслеживайте свои научные работы и просматривайте экспертные заключения.",
               })}
             </p>
           </div>
@@ -45,10 +64,10 @@ export default function AuthorDashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          <StatCard title={t({ uz: "Jami yuborilgan", en: "Total submitted", ru: "Всего отправлено" })} value={stats.total} icon={<FileText />} color="blue" />
-          <StatCard title={t({ uz: "Ko'rib chiqilmoqda", en: "Under review", ru: "На рассмотрении" })} value={stats.underReview} icon={<Clock />} color="amber" />
-          <StatCard title={t({ uz: "Tuzatish kerak", en: "Revision required", ru: "Нужна доработка" })} value={stats.revision} icon={<AlertCircle />} color="orange" />
-          <StatCard title={t({ uz: "Qabul qilingan", en: "Accepted", ru: "Принято" })} value={stats.accepted} icon={<CheckCircle />} color="emerald" />
+          <StatCard title={t({ uz: "Jami yuborilgan", en: "Total submitted", ru: "Всего отправлено" })} value={stats.total} icon={<FileText className="h-5 w-5" />} color="blue" />
+          <StatCard title={t({ uz: "Ko'rib chiqilmoqda", en: "Under review", ru: "На рассмотрении" })} value={stats.underReview} icon={<Clock className="h-5 w-5" />} color="amber" />
+          <StatCard title={t({ uz: "Tuzatish kerak", en: "Revision required", ru: "Нужна доработка" })} value={stats.revision} icon={<AlertCircle className="h-5 w-5" />} color="orange" />
+          <StatCard title={t({ uz: "Qabul qilingan", en: "Accepted", ru: "Принято" })} value={stats.accepted} icon={<CheckCircle className="h-5 w-5" />} color="emerald" />
         </div>
 
         <Card className="p-0 border border-border shadow-md overflow-hidden bg-white">
@@ -70,11 +89,7 @@ export default function AuthorDashboard() {
                 <FileText className="h-10 w-10 text-slate-400" />
               </div>
               <h4 className="text-lg font-bold text-slate-800 mb-2">
-                {t({
-                  uz: "Hali hech qanday ariza yuborilmagan",
-                  en: "No submissions yet",
-                  ru: "Пока нет отправленных заявок",
-                })}
+                {t({ uz: "Hali hech qanday ariza yuborilmagan", en: "No submissions yet", ru: "Пока нет отправленных заявок" })}
               </h4>
               <p className="text-slate-500 max-w-md mb-6">
                 {t({
@@ -94,39 +109,72 @@ export default function AuthorDashboard() {
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50/50 text-slate-500 uppercase text-xs tracking-wider border-b border-border">
                   <tr>
-                    <th className="px-6 py-4 font-semibold w-1/3">{t({ uz: "Sarlavha", en: "Title", ru: "Название" })}</th>
+                    <th className="px-6 py-4 font-semibold w-[28%]">{t({ uz: "Sarlavha", en: "Title", ru: "Название" })}</th>
                     <th className="px-6 py-4 font-semibold">{t({ uz: "Turi", en: "Type", ru: "Тип" })}</th>
                     <th className="px-6 py-4 font-semibold">{t({ uz: "Holati", en: "Status", ru: "Статус" })}</th>
+                    <th className="px-6 py-4 font-semibold">{t({ uz: "Ekspert jarayoni", en: "Expert workflow", ru: "Экспертный процесс" })}</th>
                     <th className="px-6 py-4 font-semibold">{t({ uz: "Yuborilgan sana", en: "Submitted on", ru: "Дата отправки" })}</th>
-                    <th className="px-6 py-4 font-semibold text-right">{t({ uz: "Amallar", en: "Actions", ru: "Действия" })}</th>
+                    <th className="px-6 py-4 font-semibold text-right">{t({ uz: "Ekspert xulosasi", en: "Expert conclusion", ru: "Экспертное заключение" })}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {submissions.map((submission, index) => (
-                    <tr key={submission.id} className={`hover:bg-slate-50 transition-colors ${index % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900 line-clamp-2">{submission.title}</p>
-                        <p className="text-xs text-slate-500 mt-1">{submission.scientificDirection}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-medium bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200">
-                          {getLocalizedLiteratureType(submission.literatureType, locale)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge className={`rounded-full px-3 py-0.5 border ${STATUS_COLORS[submission.status as keyof typeof STATUS_COLORS]}`}>
-                          {getLocalizedStatusLabel(submission.status, locale)}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">{formatDate(submission.createdAt, locale)}</td>
-                      <td className="px-6 py-4 text-right">
-                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 group">
-                          {t({ uz: "Batafsil", en: "Details", ru: "Подробнее" })}
-                          <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {submissions.map((submission, index) => {
+                    const summary = (submission as any).reviewSummary;
+                    return (
+                      <tr key={submission.id} className={`hover:bg-slate-50 transition-colors ${index % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-slate-900 line-clamp-2">{submission.title}</p>
+                          <p className="text-xs text-slate-500 mt-1">{submission.scientificDirection}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-xs font-medium bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200">
+                            {getLocalizedLiteratureType(submission.literatureType, locale)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge className={`rounded-full px-3 py-0.5 border ${STATUS_COLORS[submission.status as keyof typeof STATUS_COLORS]}`}>
+                            {getLocalizedStatusLabel(submission.status, locale)}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-slate-700">
+                              <ClipboardCheck className="h-4 w-4 text-primary" />
+                              <span>{getReviewSummaryText(summary, locale)}</span>
+                            </div>
+                            {(summary?.assignedExpertNames ?? []).length > 0 && (
+                              <p className="text-xs text-slate-500 pl-6">
+                                {t({ uz: "Ekspert", en: "Expert", ru: "Эксперт" })}:{" "}
+                                {(summary.assignedExpertNames as string[]).join(", ")}
+                              </p>
+                            )}
+                            {summary?.latestClassification && (
+                              <Badge className={summary.latestClassification === "positive" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-red-100 text-red-700 border-red-200"}>
+                                {summary.latestClassification === "positive"
+                                  ? t({ uz: "Ijobiy", en: "Positive", ru: "Положительное" })
+                                  : t({ uz: "Salbiy", en: "Negative", ru: "Отрицательное" })}
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">{formatDate(submission.createdAt, locale)}</td>
+                        <td className="px-6 py-4 text-right">
+                          {summary?.latestReviewId ? (
+                            <Link href={withLocale(`/reviews/${summary.latestReviewId}`)}>
+                              <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 group">
+                                {t({ uz: "Ko'rish", en: "View", ru: "Открыть" })}
+                                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                              </Button>
+                            </Link>
+                          ) : (
+                            <Button variant="ghost" size="sm" disabled className="text-slate-400">
+                              {t({ uz: "Kutilmoqda", en: "Pending", ru: "Ожидается" })}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -148,9 +196,7 @@ function StatCard({ title, value, icon, color }: { title: string; value: number;
   return (
     <Card className="p-6 border border-border shadow-sm hover:shadow-md transition-shadow bg-white">
       <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-xl ${iconColors[color as keyof typeof iconColors]}`}>
-          {React.cloneElement(icon as React.ReactElement, { className: "h-5 w-5" })}
-        </div>
+        <div className={`p-3 rounded-xl ${iconColors[color as keyof typeof iconColors]}`}>{icon}</div>
       </div>
       <div>
         <p className="text-3xl font-bold text-slate-900 font-sans mb-1">{value}</p>

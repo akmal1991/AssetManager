@@ -7,7 +7,7 @@ import NotFound from "@/pages/not-found";
 import Login from "./pages/login";
 import AuthorDashboard from "./pages/dashboard/author";
 import EditorDashboard from "./pages/dashboard/editor";
-import ReviewerDashboard from "./pages/dashboard/reviewer";
+import ExpertDashboard from "./pages/dashboard/reviewer";
 import AdminDashboard from "./pages/dashboard/admin";
 import NewSubmissionWizard from "./pages/submissions/new";
 import ReviewForm from "./pages/reviews/[id]";
@@ -22,6 +22,18 @@ import {
   withLocale,
   type Locale,
 } from "./lib/i18n";
+
+const DASHBOARD_PATH_BY_ROLE: Record<string, string> = {
+  author: "/dashboard/author",
+  editor: "/dashboard/editor",
+  reviewer: "/dashboard/expert",
+  publisher: "/dashboard/publisher",
+  admin: "/dashboard/admin",
+};
+
+function getDashboardPathForRole(role: string | undefined) {
+  return role ? DASHBOARD_PATH_BY_ROLE[role] ?? "/dashboard/author" : "/dashboard/author";
+}
 
 const originalFetch = window.fetch;
 window.fetch = async (input, init) => {
@@ -71,7 +83,7 @@ function ProtectedRoute({
     }
 
     if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-      setLocation(withLocale(`/dashboard/${user.role}`, locale));
+      setLocation(withLocale(getDashboardPathForRole(user.role), locale));
     }
   }, [allowedRoles, isAuthenticated, isLoading, locale, setLocation, user]);
 
@@ -118,7 +130,7 @@ function DefaultRedirect() {
     if (isLoading) return;
 
     if (isAuthenticated && user) {
-      setLocation(withLocale(`/dashboard/${user.role}`, locale));
+      setLocation(withLocale(getDashboardPathForRole(user.role), locale));
       return;
     }
 
@@ -187,20 +199,30 @@ function Router() {
           isLocale(params.locale) ? <ProtectedRoute component={EditorDashboard} allowedRoles={["editor", "admin"]} /> : <NotFound />
         }
       </Route>
-
-      <Route path="/:locale/dashboard/reviewer">
+      <Route path="/:locale/dashboard/publisher">
         {(params) =>
-          isLocale(params.locale) ? <ProtectedRoute component={ReviewerDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
+          isLocale(params.locale) ? <ProtectedRoute component={EditorDashboard} allowedRoles={["publisher", "admin"]} /> : <NotFound />
         }
       </Route>
-      <Route path="/:locale/dashboard/reviewer/:tab">
+      <Route path="/:locale/dashboard/publisher/:tab">
         {(params) =>
-          isLocale(params.locale) ? <ProtectedRoute component={ReviewerDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
+          isLocale(params.locale) ? <ProtectedRoute component={EditorDashboard} allowedRoles={["publisher", "admin"]} /> : <NotFound />
+        }
+      </Route>
+
+      <Route path="/:locale/dashboard/expert">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={ExpertDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
+        }
+      </Route>
+      <Route path="/:locale/dashboard/expert/:tab">
+        {(params) =>
+          isLocale(params.locale) ? <ProtectedRoute component={ExpertDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
         }
       </Route>
       <Route path="/:locale/reviews/:id">
         {(params) =>
-          isLocale(params.locale) ? <ProtectedRoute component={ReviewForm} allowedRoles={["reviewer", "editor", "admin"]} /> : <NotFound />
+          isLocale(params.locale) ? <ProtectedRoute component={ReviewForm} allowedRoles={["author", "reviewer", "editor", "publisher", "admin"]} /> : <NotFound />
         }
       </Route>
 

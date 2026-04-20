@@ -25,7 +25,7 @@ async function buildAll() {
     define: {
       "process.env.NODE_ENV": '"production"',
     },
-    packages: "external",
+    external: ["pg-native", "bcrypt"],
     minify: true,
     logLevel: "info",
   });

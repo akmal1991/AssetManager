@@ -25,16 +25,8 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { LITERATURE_TYPES } from "@/lib/utils";
-
-const REQUIRED_DOCS = [
-  { type: "main_document", label: "Asosiy hujjat (Qo'lyozma)" },
-  { type: "internal_review", label: "Ichki taqriz" },
-  { type: "external_review", label: "Tashqi taqriz" },
-  { type: "plagiarism_report", label: "Antiplagiat ma'lumotnomasi" },
-  { type: "curriculum", label: "O'quv reja" },
-  { type: "syllabus", label: "Sillabus / O'quv dasturi" },
-] as const;
+import { getLocalizedLiteratureType } from "@/lib/utils";
+import { useLocale } from "@/lib/i18n";
 
 type FormDataState = {
   title: string;
@@ -74,6 +66,7 @@ export default function NewSubmissionWizard() {
 
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { locale, t, withLocale } = useLocale();
 
   const { data: departments } = useGetDepartments();
   const { data: directionsData } = useGetScientificDirections();
@@ -85,37 +78,72 @@ export default function NewSubmissionWizard() {
     () => formData.keywords.split(",").map((keyword) => keyword.trim()).filter(Boolean),
     [formData.keywords],
   );
+  const requiredDocs = useMemo(() => [
+    { type: "main_document", label: t({ uz: "Asosiy hujjat (Qo'lyozma)", en: "Main document (manuscript)", ru: "Основной документ (рукопись)" }) },
+    { type: "internal_review", label: t({ uz: "Ichki taqriz", en: "Internal review", ru: "Внутренняя рецензия" }) },
+    { type: "external_review", label: t({ uz: "Tashqi taqriz", en: "External review", ru: "Внешняя рецензия" }) },
+    { type: "plagiarism_report", label: t({ uz: "Antiplagiat ma'lumotnomasi", en: "Plagiarism report", ru: "Справка антиплагиата" }) },
+    { type: "curriculum", label: t({ uz: "O'quv reja", en: "Curriculum", ru: "Учебный план" }) },
+    { type: "syllabus", label: t({ uz: "Sillabus / O'quv dasturi", en: "Syllabus / course program", ru: "Силлабус / учебная программа" }) },
+  ], [t]);
+  const literatureOptions = useMemo(() => [
+    {
+      id: "darslik",
+      label: getLocalizedLiteratureType("darslik", locale),
+      desc: t({ uz: "Oliy ta'lim uchun mo'ljallangan asosiy darslik", en: "Core textbook for higher education", ru: "Основной учебник для высшего образования" }),
+    },
+    {
+      id: "oquv_qollanma",
+      label: getLocalizedLiteratureType("oquv_qollanma", locale),
+      desc: t({ uz: "Darslikni to'ldiruvchi qo'shimcha manba", en: "Supplementary learning resource", ru: "Дополнительный учебный источник" }),
+    },
+    {
+      id: "monografiya",
+      label: getLocalizedLiteratureType("monografiya", locale),
+      desc: t({ uz: "Chuqur ilmiy tadqiqot ishi", en: "In-depth scientific research work", ru: "Углубленная научно-исследовательская работа" }),
+    },
+    {
+      id: "oquv_uslubiy_qollanma",
+      label: getLocalizedLiteratureType("oquv_uslubiy_qollanma", locale),
+      desc: t({ uz: "Amaliy mashg'ulotlar uchun", en: "For practical classes", ru: "Для практических занятий" }),
+    },
+    {
+      id: "uslubiy_korsatma",
+      label: getLocalizedLiteratureType("uslubiy_korsatma", locale),
+      desc: t({ uz: "Laboratoriya va mustaqil ishlar uchun", en: "For laboratory and independent work", ru: "Для лабораторных и самостоятельных работ" }),
+    },
+  ], [locale, t]);
 
   const summaryItems = [
-    { label: "Asar nomi", value: formData.title || "Kiritilmagan" },
+    { label: t({ uz: "Asar nomi", en: "Work title", ru: "Название работы" }), value: formData.title || t({ uz: "Kiritilmagan", en: "Not provided", ru: "Не указано" }) },
     {
-      label: "Til",
+      label: t({ uz: "Til", en: "Language", ru: "Язык" }),
       value:
         formData.language === "uz"
-          ? "O'zbek tili"
+          ? t({ uz: "O'zbek tili", en: "Uzbek", ru: "Узбекский" })
           : formData.language === "ru"
-            ? "Rus tili"
-            : "Ingliz tili",
+            ? t({ uz: "Rus tili", en: "Russian", ru: "Русский" })
+            : t({ uz: "Ingliz tili", en: "English", ru: "Английский" }),
     },
     {
-      label: "Ilmiy yo'nalish",
-      value: formData.scientificDirection || "Tanlanmagan",
+      label: t({ uz: "Ilmiy yo'nalish", en: "Scientific direction", ru: "Научное направление" }),
+      value: formData.scientificDirection || t({ uz: "Tanlanmagan", en: "Not selected", ru: "Не выбрано" }),
     },
     {
-      label: "Kafedra",
+      label: t({ uz: "Kafedra", en: "Department", ru: "Кафедра" }),
       value:
         departments?.find((department) => String(department.id) === formData.departmentId)?.name ??
-        "Tanlanmagan",
+        t({ uz: "Tanlanmagan", en: "Not selected", ru: "Не выбрано" }),
     },
     {
-      label: "Adabiyot turi",
+      label: t({ uz: "Adabiyot turi", en: "Literature type", ru: "Тип литературы" }),
       value: formData.literatureType
-        ? LITERATURE_TYPES[formData.literatureType as keyof typeof LITERATURE_TYPES]
-        : "Tanlanmagan",
+        ? getLocalizedLiteratureType(formData.literatureType, locale)
+        : t({ uz: "Tanlanmagan", en: "Not selected", ru: "Не выбрано" }),
     },
     {
-      label: "Kalit so'zlar",
-      value: trimmedKeywords.length > 0 ? trimmedKeywords.join(", ") : "Kiritilmagan",
+      label: t({ uz: "Kalit so'zlar", en: "Keywords", ru: "Ключевые слова" }),
+      value: trimmedKeywords.length > 0 ? trimmedKeywords.join(", ") : t({ uz: "Kiritilmagan", en: "Not provided", ru: "Не указано" }),
     },
   ];
 
@@ -128,28 +156,28 @@ export default function NewSubmissionWizard() {
     const nextErrors: WizardErrors = {};
 
     if (stepNumber === 1) {
-      if (!formData.title.trim()) nextErrors.title = "Asar nomini kiriting.";
-      if (formData.title.trim().length > 255) nextErrors.title = "Asar nomi juda uzun.";
-      if (!formData.abstract.trim()) nextErrors.abstract = "Annotatsiyani kiriting.";
+      if (!formData.title.trim()) nextErrors.title = t({ uz: "Asar nomini kiriting.", en: "Enter the work title.", ru: "Введите название работы." });
+      if (formData.title.trim().length > 255) nextErrors.title = t({ uz: "Asar nomi juda uzun.", en: "The title is too long.", ru: "Название слишком длинное." });
+      if (!formData.abstract.trim()) nextErrors.abstract = t({ uz: "Annotatsiyani kiriting.", en: "Enter the abstract.", ru: "Введите аннотацию." });
       if (formData.abstract.trim().length < 20) {
-        nextErrors.abstract = "Annotatsiya kamida 20 ta belgidan iborat bo'lsin.";
+        nextErrors.abstract = t({ uz: "Annotatsiya kamida 20 ta belgidan iborat bo'lsin.", en: "The abstract must contain at least 20 characters.", ru: "Аннотация должна содержать не менее 20 символов." });
       }
       if (trimmedKeywords.length > 10) {
-        nextErrors.keywords = "Kalit so'zlar soni 10 tadan oshmasin.";
+        nextErrors.keywords = t({ uz: "Kalit so'zlar soni 10 tadan oshmasin.", en: "Use no more than 10 keywords.", ru: "Укажите не более 10 ключевых слов." });
       }
     }
 
     if (stepNumber === 2) {
       if (!formData.scientificDirection) {
-        nextErrors.scientificDirection = "Ilmiy yo'nalishni tanlang.";
+        nextErrors.scientificDirection = t({ uz: "Ilmiy yo'nalishni tanlang.", en: "Select a scientific direction.", ru: "Выберите научное направление." });
       }
       if (!formData.departmentId) {
-        nextErrors.departmentId = "Kafedrani tanlang.";
+        nextErrors.departmentId = t({ uz: "Kafedrani tanlang.", en: "Select a department.", ru: "Выберите кафедру." });
       }
     }
 
     if (stepNumber === 3 && !formData.literatureType) {
-      nextErrors.literatureType = "Adabiyot turini tanlang.";
+      nextErrors.literatureType = t({ uz: "Adabiyot turini tanlang.", en: "Select the literature type.", ru: "Выберите тип литературы." });
     }
 
     setErrors((prev) => ({ ...prev, ...nextErrors }));
@@ -157,13 +185,15 @@ export default function NewSubmissionWizard() {
   };
 
   const validateFiles = () => {
-    const missingDocs = REQUIRED_DOCS.filter((doc) => !files[doc.type]);
+    const missingDocs = requiredDocs.filter((doc) => !files[doc.type]);
     if (missingDocs.length > 0) {
       setErrors((prev) => ({
         ...prev,
-        files: `Quyidagi hujjatlarni biriktiring: ${missingDocs
-          .map((doc) => doc.label)
-          .join(", ")}`,
+        files: t({
+          uz: `Quyidagi hujjatlarni biriktiring: ${missingDocs.map((doc) => doc.label).join(", ")}`,
+          en: `Attach the following documents: ${missingDocs.map((doc) => doc.label).join(", ")}`,
+          ru: `Прикрепите следующие документы: ${missingDocs.map((doc) => doc.label).join(", ")}`,
+        }),
       }));
       return false;
     }
@@ -174,8 +204,8 @@ export default function NewSubmissionWizard() {
   const handleNext = () => {
     if (!validateStep(step)) {
       toast({
-        title: "Tekshirib chiqing",
-        description: "Majburiy maydonlarni to'g'ri to'ldiring.",
+        title: t({ uz: "Tekshirib chiqing", en: "Please check", ru: "Проверьте данные" }),
+        description: t({ uz: "Majburiy maydonlarni to'g'ri to'ldiring.", en: "Fill in the required fields correctly.", ru: "Корректно заполните обязательные поля." }),
         variant: "destructive",
       });
       return;
@@ -195,8 +225,8 @@ export default function NewSubmissionWizard() {
     const validExtension = [".pdf", ".doc", ".docx"].some((ext) => lowerName.endsWith(ext));
     if (!validExtension) {
       toast({
-        title: "Noto'g'ri format",
-        description: "Faqat PDF, DOC yoki DOCX fayllarini yuklang.",
+        title: t({ uz: "Noto'g'ri format", en: "Invalid format", ru: "Неверный формат" }),
+        description: t({ uz: "Faqat PDF, DOC yoki DOCX fayllarini yuklang.", en: "Upload only PDF, DOC, or DOCX files.", ru: "Загружайте только файлы PDF, DOC или DOCX." }),
         variant: "destructive",
       });
       return;
@@ -204,8 +234,8 @@ export default function NewSubmissionWizard() {
 
     if (file.size > 100 * 1024 * 1024) {
       toast({
-        title: "Fayl juda katta",
-        description: "Har bir fayl hajmi 100 MB dan oshmasligi kerak.",
+        title: t({ uz: "Fayl juda katta", en: "File is too large", ru: "Файл слишком большой" }),
+        description: t({ uz: "Har bir fayl hajmi 100 MB dan oshmasligi kerak.", en: "Each file must not exceed 100 MB.", ru: "Размер каждого файла не должен превышать 100 МБ." }),
         variant: "destructive",
       });
       return;
@@ -238,8 +268,8 @@ export default function NewSubmissionWizard() {
   const handleFinalSubmit = async () => {
     if (!validateStep(1) || !validateStep(2) || !validateStep(3) || !validateFiles()) {
       toast({
-        title: "Ma'lumot yetarli emas",
-        description: "Barcha bosqichlarni to'liq yakunlang.",
+        title: t({ uz: "Ma'lumot yetarli emas", en: "Incomplete information", ru: "Недостаточно данных" }),
+        description: t({ uz: "Barcha bosqichlarni to'liq yakunlang.", en: "Complete all steps before submission.", ru: "Полностью завершите все этапы перед отправкой." }),
         variant: "destructive",
       });
       return;
@@ -249,7 +279,7 @@ export default function NewSubmissionWizard() {
     try {
       const currentSubmissionId = await ensureSubmissionExists();
 
-      for (const doc of REQUIRED_DOCS) {
+      for (const doc of requiredDocs) {
         if (uploadProgress[doc.type] === "done") continue;
 
         const selectedFile = files[doc.type];
@@ -268,15 +298,15 @@ export default function NewSubmissionWizard() {
       }
 
       toast({
-        title: "Muvaffaqiyatli yuborildi",
-        description: "Ilmiy ish va barcha hujjatlar ekspertiza uchun saqlandi.",
+        title: t({ uz: "Muvaffaqiyatli yuborildi", en: "Successfully submitted", ru: "Успешно отправлено" }),
+        description: t({ uz: "Ilmiy ish va barcha hujjatlar ekspertiza uchun saqlandi.", en: "The work and all documents were saved for expert review.", ru: "Работа и все документы сохранены для экспертной проверки." }),
       });
-      setLocation("/dashboard/author");
+      setLocation(withLocale("/dashboard/author"));
     } catch (err: any) {
       const message =
         err?.response?.data?.error ||
         err?.message ||
-        "Yuborish jarayonida xatolik yuz berdi. Qayta urinib ko'ring.";
+        t({ uz: "Yuborish jarayonida xatolik yuz berdi. Qayta urinib ko'ring.", en: "An error occurred during submission. Please try again.", ru: "Во время отправки произошла ошибка. Попробуйте еще раз." });
 
       setErrors((prev) => ({ ...prev, form: message }));
       setUploadProgress((prev) =>
@@ -284,13 +314,13 @@ export default function NewSubmissionWizard() {
           Object.entries(prev).map(([key, value]) => [key, value === "uploading" ? "pending" : value]),
         ),
       );
-      toast({ title: "Yuborib bo'lmadi", description: message, variant: "destructive" });
+      toast({ title: t({ uz: "Yuborib bo'lmadi", en: "Submission failed", ru: "Не удалось отправить" }), description: message, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const allFilesSelected = REQUIRED_DOCS.every((doc) => Boolean(files[doc.type]));
+  const allFilesSelected = requiredDocs.every((doc) => Boolean(files[doc.type]));
 
   const renderFieldError = (field: keyof WizardErrors) =>
     errors[field] ? <p className="mt-2 text-sm text-red-600">{errors[field]}</p> : null;
@@ -298,10 +328,10 @@ export default function NewSubmissionWizard() {
   const renderStepActions = () => (
     <div className="flex justify-between pt-6 border-t border-slate-100 mt-8">
       <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1} className="w-32">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Orqaga
+        <ArrowLeft className="mr-2 h-4 w-4" /> {t({ uz: "Orqaga", en: "Back", ru: "Назад" })}
       </Button>
       <Button type="button" onClick={handleNext} className="w-48 shadow-lg shadow-primary/20">
-        Keyingisi
+        {t({ uz: "Keyingisi", en: "Next", ru: "Далее" })}
         <ArrowRight className="ml-2 h-4 w-4" />
       </Button>
     </div>
@@ -312,9 +342,19 @@ export default function NewSubmissionWizard() {
       <PageTransition>
         <div className="max-w-4xl mx-auto py-8">
           <div className="mb-10">
-            <h2 className="text-3xl font-serif font-bold text-primary">Yangi ilmiy ish yuborish</h2>
+            <h2 className="text-3xl font-serif font-bold text-primary">
+              {t({
+                uz: "Yangi ilmiy ish yuborish",
+                en: "Submit a new scientific work",
+                ru: "Отправить новую научную работу",
+              })}
+            </h2>
             <p className="text-muted-foreground mt-2">
-              To'liq ma'lumotlarni kiriting va hujjatlarni biriktiring.
+              {t({
+                uz: "To'liq ma'lumotlarni kiriting va hujjatlarni biriktiring.",
+                en: "Enter the complete details and attach the required documents.",
+                ru: "Заполните все сведения и прикрепите необходимые документы.",
+              })}
             </p>
           </div>
 
@@ -354,26 +394,40 @@ export default function NewSubmissionWizard() {
                 {step === 1 && (
                   <div className="space-y-5">
                     <h3 className="text-xl font-bold font-serif border-b border-slate-100 pb-3 mb-6 text-slate-800">
-                      1. Asosiy ma'lumotlar
+                      {t({ uz: "1. Asosiy ma'lumotlar", en: "1. Basic information", ru: "1. Основная информация" })}
                     </h3>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5 text-slate-700">Asar nomi</label>
+                      <label className="block text-sm font-medium mb-1.5 text-slate-700">
+                        {t({ uz: "Asar nomi", en: "Work title", ru: "Название работы" })}
+                      </label>
                       <Input
                         value={formData.title}
                         onChange={(event) => setFieldValue("title", event.target.value)}
-                        placeholder="Masalan: Oliy matematika asoslari"
+                        placeholder={t({
+                          uz: "Masalan: Oliy matematika asoslari",
+                          en: "Example: Fundamentals of Higher Mathematics",
+                          ru: "Например: Основы высшей математики",
+                        })}
                         className="bg-slate-50"
                       />
                       {renderFieldError("title")}
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5 text-slate-700">
-                        Annotatsiya (Qisqacha mazmuni)
+                        {t({
+                          uz: "Annotatsiya (Qisqacha mazmuni)",
+                          en: "Abstract (short summary)",
+                          ru: "Аннотация (краткое содержание)",
+                        })}
                       </label>
                       <Textarea
                         value={formData.abstract}
                         onChange={(event) => setFieldValue("abstract", event.target.value)}
-                        placeholder="Asar nima haqida..."
+                        placeholder={t({
+                          uz: "Asar nima haqida...",
+                          en: "Describe what the work is about...",
+                          ru: "Опишите, о чем эта работа...",
+                        })}
                         className="min-h-[150px] bg-slate-50"
                       />
                       {renderFieldError("abstract")}
@@ -381,27 +435,43 @@ export default function NewSubmissionWizard() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-sm font-medium mb-1.5 text-slate-700">
-                          Kalit so'zlar (vergul bilan ajrating)
+                          {t({
+                            uz: "Kalit so'zlar (vergul bilan ajrating)",
+                            en: "Keywords (separate with commas)",
+                            ru: "Ключевые слова (через запятую)",
+                          })}
                         </label>
                         <Input
                           value={formData.keywords}
                           onChange={(event) => setFieldValue("keywords", event.target.value)}
-                          placeholder="matematika, fizika, teoremalar"
+                          placeholder={t({
+                            uz: "matematika, fizika, teoremalar",
+                            en: "mathematics, physics, theorems",
+                            ru: "математика, физика, теоремы",
+                          })}
                           className="bg-slate-50"
                         />
-                        <p className="mt-2 text-xs text-slate-500">Maksimal 10 ta kalit so'z.</p>
+                        <p className="mt-2 text-xs text-slate-500">
+                          {t({
+                            uz: "Maksimal 10 ta kalit so'z.",
+                            en: "Use no more than 10 keywords.",
+                            ru: "Укажите не более 10 ключевых слов.",
+                          })}
+                        </p>
                         {renderFieldError("keywords")}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1.5 text-slate-700">Asar tili</label>
+                        <label className="block text-sm font-medium mb-1.5 text-slate-700">
+                          {t({ uz: "Asar tili", en: "Work language", ru: "Язык работы" })}
+                        </label>
                         <Select
                           value={formData.language}
                           onChange={(event) => setFieldValue("language", event.target.value)}
                           className="bg-slate-50"
                         >
-                          <option value="uz">O'zbek tili</option>
-                          <option value="ru">Rus tili</option>
-                          <option value="en">Ingliz tili</option>
+                          <option value="uz">{t({ uz: "O'zbek tili", en: "Uzbek", ru: "Узбекский" })}</option>
+                          <option value="ru">{t({ uz: "Rus tili", en: "Russian", ru: "Русский" })}</option>
+                          <option value="en">{t({ uz: "Ingliz tili", en: "English", ru: "Английский" })}</option>
                         </Select>
                       </div>
                     </div>
@@ -412,10 +482,16 @@ export default function NewSubmissionWizard() {
                 {step === 2 && (
                   <div className="space-y-5">
                     <h3 className="text-xl font-bold font-serif border-b border-slate-100 pb-3 mb-6 text-slate-800">
-                      2. Yo'nalish va Kafedra
+                      {t({
+                        uz: "2. Yo'nalish va kafedra",
+                        en: "2. Direction and department",
+                        ru: "2. Направление и кафедра",
+                      })}
                     </h3>
                     <div>
-                      <label className="block text-sm font-medium mb-3 text-slate-700">Ilmiy yo'nalish</label>
+                      <label className="block text-sm font-medium mb-3 text-slate-700">
+                        {t({ uz: "Ilmiy yo'nalish", en: "Scientific direction", ru: "Научное направление" })}
+                      </label>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {scientificDirections.map((direction) => (
                           <button
@@ -435,13 +511,17 @@ export default function NewSubmissionWizard() {
                       {renderFieldError("scientificDirection")}
                     </div>
                     <div className="mt-8">
-                      <label className="block text-sm font-medium mb-1.5 text-slate-700">Tegishli Kafedra</label>
+                      <label className="block text-sm font-medium mb-1.5 text-slate-700">
+                        {t({ uz: "Tegishli kafedra", en: "Responsible department", ru: "Ответственная кафедра" })}
+                      </label>
                       <Select
                         value={formData.departmentId}
                         onChange={(event) => setFieldValue("departmentId", event.target.value)}
                         className="bg-slate-50"
                       >
-                        <option value="">Kafedrani tanlang...</option>
+                        <option value="">
+                          {t({ uz: "Kafedrani tanlang...", en: "Select a department...", ru: "Выберите кафедру..." })}
+                        </option>
                         {departments?.map((department) => (
                           <option key={department.id} value={department.id}>
                             {department.name}
@@ -457,36 +537,10 @@ export default function NewSubmissionWizard() {
                 {step === 3 && (
                   <div className="space-y-5">
                     <h3 className="text-xl font-bold font-serif border-b border-slate-100 pb-3 mb-6 text-slate-800">
-                      3. Adabiyot turi
+                      {t({ uz: "3. Adabiyot turi", en: "3. Literature type", ru: "3. Тип литературы" })}
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {[
-                        {
-                          id: "darslik",
-                          label: "Darslik",
-                          desc: "Oliy ta'lim uchun mo'ljallangan asosiy darslik",
-                        },
-                        {
-                          id: "oquv_qollanma",
-                          label: "O'quv qo'llanma",
-                          desc: "Darslikni to'ldiruvchi qo'shimcha manba",
-                        },
-                        {
-                          id: "monografiya",
-                          label: "Monografiya",
-                          desc: "Chuqur ilmiy tadqiqot ishi",
-                        },
-                        {
-                          id: "oquv_uslubiy_qollanma",
-                          label: "O'quv-uslubiy qo'llanma",
-                          desc: "Amaliy mashg'ulotlar uchun",
-                        },
-                        {
-                          id: "uslubiy_korsatma",
-                          label: "Uslubiy ko'rsatma",
-                          desc: "Laboratoriya va mustaqil ishlar uchun",
-                        },
-                      ].map((type) => (
+                      {literatureOptions.map((type) => (
                         <button
                           type="button"
                           key={type.id}
@@ -512,15 +566,28 @@ export default function NewSubmissionWizard() {
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="text-2xl font-bold font-serif text-slate-800">
-                      4. Yakuniy tekshiruv va hujjatlarni yuklash
+                      {t({
+                        uz: "4. Yakuniy tekshiruv va hujjatlarni yuklash",
+                        en: "4. Final review and document upload",
+                        ru: "4. Финальная проверка и загрузка документов",
+                      })}
                     </h3>
                     <p className="text-sm text-slate-500 mt-1">
-                      Ma'lumotlarni tekshiring, barcha majburiy fayllarni biriktiring va yakuniy yuborishni tasdiqlang.
+                      {t({
+                        uz: "Ma'lumotlarni tekshiring, barcha majburiy fayllarni biriktiring va yakuniy yuborishni tasdiqlang.",
+                        en: "Review the information, attach all required files, and confirm the final submission.",
+                        ru: "Проверьте данные, прикрепите все обязательные файлы и подтвердите отправку.",
+                      })}
                     </p>
                   </div>
                   {!submissionId && (
                     <Button type="button" variant="outline" onClick={handleBack} className="w-full md:w-auto">
-                      <ArrowLeft className="mr-2 h-4 w-4" /> Oldingi bosqichga qaytish
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      {t({
+                        uz: "Oldingi bosqichga qaytish",
+                        en: "Return to previous step",
+                        ru: "Вернуться к предыдущему шагу",
+                      })}
                     </Button>
                   )}
                 </div>
@@ -528,7 +595,7 @@ export default function NewSubmissionWizard() {
                 <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                     <h4 className="text-sm font-bold uppercase tracking-wide text-slate-600 mb-4">
-                      Yuboriladigan ma'lumotlar
+                      {t({ uz: "Yuboriladigan ma'lumotlar", en: "Submission details", ru: "Данные для отправки" })}
                     </h4>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {summaryItems.map((item) => (
@@ -541,19 +608,21 @@ export default function NewSubmissionWizard() {
                       ))}
                     </div>
                     <div className="mt-4 rounded-xl bg-white p-4 border border-slate-200">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Annotatsiya</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        {t({ uz: "Annotatsiya", en: "Abstract", ru: "Аннотация" })}
+                      </p>
                       <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">
-                        {formData.abstract || "Kiritilmagan"}
+                        {formData.abstract || t({ uz: "Kiritilmagan", en: "Not provided", ru: "Не указано" })}
                       </p>
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <h4 className="text-sm font-bold uppercase tracking-wide text-slate-600 mb-4">
-                      Majburiy hujjatlar
+                      {t({ uz: "Majburiy hujjatlar", en: "Required documents", ru: "Обязательные документы" })}
                     </h4>
                     <div className="space-y-3">
-                      {REQUIRED_DOCS.map((doc) => {
+                      {requiredDocs.map((doc) => {
                         const file = files[doc.type];
                         const status = uploadProgress[doc.type];
 
@@ -578,8 +647,12 @@ export default function NewSubmissionWizard() {
                                 <p className="font-semibold text-sm text-slate-800">{doc.label}</p>
                                 <p className="text-xs text-slate-500 truncate mt-0.5">
                                   {file
-                                    ? `${file.name} • ${(file.size / 1024 / 1024).toFixed(1)} MB`
-                                    : "PDF yoki DOCX formatida"}
+                                    ? `${file.name} - ${(file.size / 1024 / 1024).toFixed(1)} MB`
+                                    : t({
+                                        uz: "PDF, DOC yoki DOCX formatida",
+                                        en: "PDF, DOC, or DOCX format",
+                                        ru: "Формат PDF, DOC или DOCX",
+                                      })}
                                 </p>
                               </div>
                             </div>
@@ -599,7 +672,9 @@ export default function NewSubmissionWizard() {
                                     }
                                   />
                                   <div className="bg-white border border-slate-200 text-slate-700 hover:bg-primary hover:text-white hover:border-primary transition-colors px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
-                                    {file ? "Almashtirish" : "Tanlash"}
+                                    {file
+                                      ? t({ uz: "Almashtirish", en: "Replace", ru: "Заменить" })
+                                      : t({ uz: "Tanlash", en: "Select", ru: "Выбрать" })}
                                   </div>
                                 </label>
                               )}
@@ -615,8 +690,16 @@ export default function NewSubmissionWizard() {
                 <div className="pt-6 border-t border-slate-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-slate-500">
                     {allFilesSelected
-                      ? "Barcha hujjatlar tayyor. Yakuniy yuborishni boshlashingiz mumkin."
-                      : "Yakuniy yuborishdan oldin barcha majburiy hujjatlarni biriktiring."}
+                      ? t({
+                          uz: "Barcha hujjatlar tayyor. Yakuniy yuborishni boshlashingiz mumkin.",
+                          en: "All documents are ready. You can start the final submission.",
+                          ru: "Все документы готовы. Можно выполнить финальную отправку.",
+                        })
+                      : t({
+                          uz: "Yakuniy yuborishdan oldin barcha majburiy hujjatlarni biriktiring.",
+                          en: "Attach all required documents before final submission.",
+                          ru: "Перед финальной отправкой прикрепите все обязательные документы.",
+                        })}
                   </p>
                   <Button
                     size="lg"
@@ -625,7 +708,9 @@ export default function NewSubmissionWizard() {
                     className="w-full sm:w-auto shadow-xl shadow-primary/30 text-lg px-8 h-14"
                   >
                     <UploadCloud className="mr-3 h-6 w-6" />
-                    {isSubmitting ? "Yuborilmoqda..." : "Yakuniy yuborish"}
+                    {isSubmitting
+                      ? t({ uz: "Yuborilmoqda...", en: "Submitting...", ru: "Отправка..." })
+                      : t({ uz: "Yakuniy yuborish", en: "Submit final version", ru: "Отправить окончательно" })}
                   </Button>
                 </div>
               </div>

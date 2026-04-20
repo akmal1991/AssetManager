@@ -1,26 +1,208 @@
 import React, { useState } from "react";
+import { Link, useLocation, useRoute } from "wouter";
+import { ArrowLeft, Save, Send, FileText, User, ClipboardCheck } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import { Button, Card, Textarea, PageTransition, LoadingSpinner, Input, Badge } from "@/components/ui/shared";
 import { useGetReview, useSubmitReview } from "@workspace/api-client-react";
-import { Button, Card, Textarea, PageTransition, LoadingSpinner } from "@/components/ui/shared";
-import { useRoute, useLocation, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Send, CheckCircle, Edit3, AlertTriangle, XCircle, FileText, User } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { getLocalizedLiteratureType, getLocalizedReviewVerdict } from "@/lib/utils";
-import { useLocale } from "@/lib/i18n";
+import { useLocale, type Locale } from "@/lib/i18n";
 
-const VERDICT_STYLES = {
-  accept: "border-emerald-500 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-500/20 shadow-sm",
-  minor_revision: "border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-500/20 shadow-sm",
-  major_revision: "border-orange-500 bg-orange-50 text-orange-700 ring-2 ring-orange-500/20 shadow-sm",
-  reject: "border-red-500 bg-red-50 text-red-700 ring-2 ring-red-500/20 shadow-sm",
+type FormState = {
+  authors: string;
+  title: string;
+  literatureType: string;
+  specialty: string;
+  educationLevel: string;
+  departmentFaculty: string;
+  literatureTypeNote: string;
+  curriculumCompliance: string;
+  curriculumNote: string;
+  syllabusCompliance: string;
+  syllabusNote: string;
+  purposeRelevance: string;
+  scientificLevel: string;
+  structurePresentation: string;
+  universityImportance: string;
+  universityImportanceBasis: string;
+  regulatoryCompliance: string;
+  regulatoryNote: string;
+  scientificity: string;
+  sources: string;
+  languageStyle: string;
+  practicalImportance: string;
+  finalRecommendation: string;
+  finalNote: string;
+  expertFullName: string;
+  expertDegree: string;
+  workplace: string;
+  signature: string;
+  signedDate: string;
+  confidentialEditorNote: string;
+  scientificSignificanceScore: string;
+  methodologyScore: string;
+  structureClarityScore: string;
+  originalityScore: string;
 };
 
-const VERDICT_ICON_STYLES = {
-  accept: "text-emerald-600",
-  minor_revision: "text-blue-600",
-  major_revision: "text-orange-600",
-  reject: "text-red-600",
+const initialForm: FormState = {
+  authors: "",
+  title: "",
+  literatureType: "",
+  specialty: "",
+  educationLevel: "",
+  departmentFaculty: "",
+  literatureTypeNote: "",
+  curriculumCompliance: "",
+  curriculumNote: "",
+  syllabusCompliance: "",
+  syllabusNote: "",
+  purposeRelevance: "",
+  scientificLevel: "",
+  structurePresentation: "",
+  universityImportance: "",
+  universityImportanceBasis: "",
+  regulatoryCompliance: "",
+  regulatoryNote: "",
+  scientificity: "",
+  sources: "",
+  languageStyle: "",
+  practicalImportance: "",
+  finalRecommendation: "",
+  finalNote: "",
+  expertFullName: "",
+  expertDegree: "",
+  workplace: "",
+  signature: "",
+  signedDate: new Date().toISOString().slice(0, 10),
+  confidentialEditorNote: "",
+  scientificSignificanceScore: "",
+  methodologyScore: "",
+  structureClarityScore: "",
+  originalityScore: "",
 };
+
+const copy = {
+  title: {
+    uz: "ILMIY VA O'QUV ADABIYOTLARNI EKSPERTIZADAN O'TKAZISH BO'YICHA EKSPERT XULOSASI",
+    en: "EXPERT CONCLUSION FOR THE REVIEW OF SCIENTIFIC AND EDUCATIONAL LITERATURE",
+    ru: "ЭКСПЕРТНОЕ ЗАКЛЮЧЕНИЕ ПО ЭКСПЕРТИЗЕ НАУЧНОЙ И УЧЕБНОЙ ЛИТЕРАТУРЫ",
+  },
+  section1: { uz: "1. Umumiy ma'lumotlar", en: "1. General information", ru: "1. Общие сведения" },
+  section2: { uz: "2. Adabiyot turini aniqlash", en: "2. Literature type", ru: "2. Тип литературы" },
+  section3: { uz: "3. O'quv rejaga mosligi", en: "3. Compliance with curriculum", ru: "3. Соответствие учебному плану" },
+  section4: { uz: "4. Sillabus asosida tuzilganligi", en: "4. Compliance with syllabus", ru: "4. Соответствие силлабусу" },
+  section5: { uz: "5. Asarning maqsadi va dolzarbligi", en: "5. Purpose and relevance of the work", ru: "5. Цель и актуальность работы" },
+  section6: { uz: "6. Ilmiy darajasi va mazmuni", en: "6. Scientific level and content", ru: "6. Научный уровень и содержание" },
+  section7: { uz: "7. Tuzilishi va bayoni", en: "7. Structure and presentation", ru: "7. Структура и изложение" },
+  section8: { uz: "8. Universitet uchun ahamiyati", en: "8. Importance for the university", ru: "8. Значимость для университета" },
+  section9: { uz: "9. Normativ hujjatlarga muvofiqligi (2025-yil 22-avgust, 530-son qaror)", en: "9. Compliance with regulations (Resolution No. 530, 22 August 2025)", ru: "9. Соответствие нормативным документам (Постановление N 530 от 22 августа 2025 г.)" },
+  section10: { uz: "10. Mazmun va ilmiy-uslubiy darajasi", en: "10. Content and scientific-methodical level", ru: "10. Содержание и научно-методический уровень" },
+  section11: { uz: "11. Umumiy xulosa", en: "11. Overall conclusion", ru: "11. Общее заключение" },
+  section12: { uz: "12. Ekspert ma'lumotlari", en: "12. Expert information", ru: "12. Сведения об эксперте" },
+  note: { uz: "Izoh", en: "Comment", ru: "Примечание" },
+  basis: { uz: "Asos", en: "Basis", ru: "Основание" },
+  confidential: { uz: "Ekspert jarayoni uchun yopiq izoh", en: "Confidential note for the expert workflow", ru: "Конфиденциальное примечание для экспертного процесса" },
+  submit: { uz: "Ekspert xulosasini yuborish", en: "Submit expert conclusion", ru: "Отправить экспертное заключение" },
+  saveDraft: { uz: "Qoralamani saqlash", en: "Save draft", ru: "Сохранить черновик" },
+  sectionScores: { uz: "Baholash ballari", en: "Evaluation scores", ru: "Оценочные баллы" },
+} as const;
+
+const fieldLabels = {
+  authors: { uz: "Muallif(lar)", en: "Author(s)", ru: "Автор(ы)" },
+  title: { uz: "Adabiyot nomi", en: "Literature title", ru: "Название литературы" },
+  literatureType: { uz: "Adabiyot turi", en: "Literature type", ru: "Тип литературы" },
+  specialty: { uz: "Mutaxassislik", en: "Specialty", ru: "Специальность" },
+  educationLevel: { uz: "Ta'lim darajasi", en: "Education level", ru: "Уровень образования" },
+  departmentFaculty: { uz: "Kafedra/Fakultet", en: "Department/Faculty", ru: "Кафедра/Факультет" },
+  scientificity: { uz: "Ilmiylik", en: "Scientific quality", ru: "Научность" },
+  sources: { uz: "Manbalar", en: "Sources", ru: "Источники" },
+  languageStyle: { uz: "Til va uslub", en: "Language and style", ru: "Язык и стиль" },
+  practicalImportance: { uz: "Amaliy ahamiyati", en: "Practical importance", ru: "Практическая значимость" },
+  expertFullName: { uz: "F.I.Sh.", en: "Full name", ru: "Ф.И.О." },
+  expertDegree: { uz: "Ilmiy daraja", en: "Academic degree", ru: "Ученая степень" },
+  workplace: { uz: "Ish joyi", en: "Workplace", ru: "Место работы" },
+  signature: { uz: "Imzo", en: "Signature", ru: "Подпись" },
+  signedDate: { uz: "Sana", en: "Date", ru: "Дата" },
+} as const;
+
+const options = {
+  literatureType: [
+    { value: "darslik", label: { uz: "Darslik", en: "Textbook", ru: "Учебник" } },
+    { value: "oquv_qollanma", label: { uz: "O'quv qo'llanma", en: "Study guide", ru: "Учебное пособие" } },
+    { value: "oquv_uslubiy_qollanma", label: { uz: "Uslubiy qo'llanma", en: "Methodical guide", ru: "Методическое пособие" } },
+    { value: "monografiya", label: { uz: "Monografiya", en: "Monograph", ru: "Монография" } },
+  ],
+  compliance: [
+    { value: "full", label: { uz: "To'liq mos", en: "Fully compliant", ru: "Полностью соответствует" } },
+    { value: "partial", label: { uz: "Qisman mos", en: "Partially compliant", ru: "Частично соответствует" } },
+    { value: "none", label: { uz: "Mos emas", en: "Not compliant", ru: "Не соответствует" } },
+  ],
+  importance: [
+    { value: "high", label: { uz: "Yuqori", en: "High", ru: "Высокая" } },
+    { value: "medium", label: { uz: "O'rta", en: "Medium", ru: "Средняя" } },
+    { value: "low", label: { uz: "Past", en: "Low", ru: "Низкая" } },
+  ],
+  finalRecommendation: [
+    { value: "recommended", label: { uz: "Tavsiya etiladi", en: "Recommended", ru: "Рекомендуется" } },
+    { value: "revise", label: { uz: "Qayta ishlash kerak", en: "Requires revision", ru: "Требуется доработка" } },
+    { value: "reject", label: { uz: "Rad etiladi", en: "Rejected", ru: "Отклоняется" } },
+  ],
+} as const;
+
+function l(value: Record<Locale, string>, locale: Locale) {
+  return value[locale] ?? value.uz;
+}
+
+function optionText(group: keyof typeof options, value: string, locale: Locale) {
+  return options[group].find((item) => item.value === value)?.label[locale] ?? value;
+}
+
+function getClassificationCopy(classification: string | null | undefined, locale: Locale) {
+  const labels = {
+    positive: { uz: "Ijobiy xulosa", en: "Positive conclusion", ru: "Положительное заключение" },
+    negative: { uz: "Salbiy xulosa", en: "Negative conclusion", ru: "Отрицательное заключение" },
+  } as const;
+  if (!classification) return "";
+  return labels[classification as keyof typeof labels]?.[locale] ?? classification;
+}
+
+function RadioGroup({
+  name,
+  value,
+  group,
+  locale,
+  disabled,
+  onChange,
+}: {
+  name: string;
+  value: string;
+  group: keyof typeof options;
+  locale: Locale;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      {options[group].map((item) => (
+        <label key={item.value} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${value === item.value ? "border-primary bg-primary/5 text-primary" : "border-slate-200 bg-white text-slate-700"}`}>
+          <input type="radio" name={name} value={item.value} checked={value === item.value} onChange={() => onChange(item.value)} disabled={disabled} />
+          {item.label[locale]}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card className="p-6 border border-border shadow-sm bg-white">
+      <h3 className="text-lg font-bold font-serif mb-5 text-slate-900 border-b border-slate-100 pb-3">{title}</h3>
+      {children}
+    </Card>
+  );
+}
 
 export default function ReviewForm() {
   const [, params] = useRoute("/reviews/:id");
@@ -28,45 +210,98 @@ export default function ReviewForm() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { locale, t, withLocale } = useLocale();
+  const { user } = useAuth();
 
   const { data: review, isLoading } = useGetReview(reviewId);
   const submitMutation = useSubmitReview();
+  const reviewData = review as any;
 
-  const [scores, setScores] = useState({
-    scientificSignificance: 5,
-    methodology: 5,
-    structureClarity: 5,
-    originality: 5,
-  });
-
-  const [comments, setComments] = useState({
-    commentsForAuthor: "",
-    commentsForEditor: "",
-  });
-  const [verdict, setVerdict] = useState<any>("");
+  const [form, setForm] = useState<FormState>(initialForm);
 
   React.useEffect(() => {
-    if (review?.status === "submitted") {
-      setScores({
-        scientificSignificance: review.scientificSignificance || 5,
-        methodology: review.methodology || 5,
-        structureClarity: review.structureClarity || 5,
-        originality: review.originality || 5,
+    if (!reviewData) return;
+    const saved = reviewData.conclusionForm && typeof reviewData.conclusionForm === "object" ? reviewData.conclusionForm : {};
+    setForm({
+      ...initialForm,
+      ...saved,
+      authors: saved.authors || reviewData.submission?.authorName || "",
+      title: saved.title || reviewData.submissionTitle || "",
+      literatureType: saved.literatureType || reviewData.submission?.literatureType || "",
+      specialty: saved.specialty || reviewData.submission?.scientificDirection || "",
+      departmentFaculty: saved.departmentFaculty || "",
+      expertFullName: saved.expertFullName || reviewData.reviewerName || "",
+      expertDegree: saved.expertDegree || "",
+      signedDate: saved.signedDate || new Date().toISOString().slice(0, 10),
+      scientificSignificanceScore: saved.scientificSignificanceScore || String(reviewData.scientificSignificance ?? ""),
+      methodologyScore: saved.methodologyScore || String(reviewData.methodology ?? ""),
+      structureClarityScore: saved.structureClarityScore || String(reviewData.structureClarity ?? ""),
+      originalityScore: saved.originalityScore || String(reviewData.originality ?? ""),
+    });
+  }, [reviewData]);
+
+  const update = (key: keyof FormState, value: string) => setForm((current) => ({ ...current, [key]: value }));
+
+  const getPayload = () => ({
+    conclusionForm: form,
+    conclusionSummary: form.purposeRelevance,
+    strengths: form.scientificLevel,
+    weaknesses: form.structurePresentation,
+    recommendation: form.finalRecommendation ? optionText("finalRecommendation", form.finalRecommendation, locale) : "",
+    commentsForAuthor: form.finalNote,
+    commentsForEditor: form.confidentialEditorNote,
+    scientificSignificance: form.scientificSignificanceScore || undefined,
+    methodology: form.methodologyScore || undefined,
+    structureClarity: form.structureClarityScore || undefined,
+    originality: form.originalityScore || undefined,
+    verdict: form.finalRecommendation === "recommended" ? "accept" : form.finalRecommendation === "revise" ? "major_revision" : form.finalRecommendation === "reject" ? "reject" : undefined,
+  });
+
+  const validateScores = () => {
+    const scores = [form.scientificSignificanceScore, form.methodologyScore, form.structureClarityScore, form.originalityScore];
+    return scores.every((value) => {
+      const numberValue = Number(value);
+      return Number.isInteger(numberValue) && numberValue >= 1 && numberValue <= 10;
+    });
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      const token = localStorage.getItem("portal_token");
+      const response = await fetch(`/api/reviews/${reviewId}/draft`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(getPayload()),
       });
-      setComments({
-        commentsForAuthor: review.commentsForAuthor || "",
-        commentsForEditor: review.commentsForEditor || "",
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to save draft");
+      }
+      toast({
+        title: t({ uz: "Qoralama saqlandi", en: "Draft saved", ru: "Черновик сохранен" }),
+        description: t({ uz: "Ekspert xulosasi qoralama sifatida saqlandi.", en: "The expert conclusion was saved as a draft.", ru: "Экспертное заключение сохранено как черновик." }),
       });
-      setVerdict(review.verdict);
+    } catch (error: any) {
+      toast({
+        title: t({ uz: "Xatolik", en: "Error", ru: "Ошибка" }),
+        description: error?.message || t({ uz: "Qoralamani saqlab bo'lmadi", en: "Failed to save draft", ru: "Не удалось сохранить черновик" }),
+        variant: "destructive",
+      });
     }
-  }, [review]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!verdict) {
+    if (!form.finalRecommendation || !form.purposeRelevance || !form.finalNote || !validateScores()) {
       toast({
-        title: t({ uz: "Diqqat", en: "Attention", ru: "Внимание" }),
-        description: t({ uz: "Yakuniy xulosani tanlang", en: "Select a final verdict", ru: "Выберите итоговый вердикт" }),
+        title: t({ uz: "Majburiy maydonlar", en: "Required fields", ru: "Обязательные поля" }),
+        description: t({
+          uz: "Asarning maqsadi, umumiy xulosa, yakuniy tavsiya va 1-10 oralig'idagi ballarni to'ldiring.",
+          en: "Fill in the purpose, overall conclusion, final recommendation, and all 1-10 scores.",
+          ru: "Заполните цель работы, общее заключение и итоговую рекомендацию.",
+        }),
         variant: "destructive",
       });
       return;
@@ -76,180 +311,189 @@ export default function ReviewForm() {
       await submitMutation.mutateAsync({
         id: reviewId,
         data: {
-          ...scores,
-          ...comments,
-          verdict,
-        },
+          ...getPayload(),
+        } as any,
       });
       toast({
         title: t({ uz: "Muvaffaqiyatli", en: "Success", ru: "Успешно" }),
-        description: t({ uz: "Taqriz yuborildi", en: "Review submitted", ru: "Рецензия отправлена" }),
+        description: t({ uz: "Ekspert xulosasi yuborildi", en: "Expert conclusion submitted", ru: "Экспертное заключение отправлено" }),
       });
-      setLocation(withLocale("/dashboard/reviewer"));
-    } catch {
+      setLocation(withLocale("/dashboard/expert/history"));
+    } catch (error: any) {
       toast({
         title: t({ uz: "Xatolik", en: "Error", ru: "Ошибка" }),
-        description: t({ uz: "Saqlashda xatolik", en: "Failed to save review", ru: "Не удалось сохранить рецензию" }),
+        description: error?.message || t({ uz: "Saqlashda xatolik", en: "Failed to save conclusion", ru: "Не удалось сохранить заключение" }),
         variant: "destructive",
       });
     }
   };
 
-  const handleScoreChange = (key: string, value: number) => {
-    if (value >= 1 && value <= 10) {
-      setScores({ ...scores, [key]: value });
-    }
-  };
-
-  if (isLoading || !review) {
+  if (isLoading || !reviewData) {
     return <DashboardLayout><LoadingSpinner /></DashboardLayout>;
   }
 
-  const isReadOnly = review.status === "submitted";
-
-  const verdictOptions = [
-    { id: "accept", label: t({ uz: "Qabul qilish", en: "Accept", ru: "Принять" }), icon: CheckCircle },
-    { id: "minor_revision", label: t({ uz: "Kichik tuzatishlar", en: "Minor revision", ru: "Небольшие правки" }), icon: Edit3 },
-    { id: "major_revision", label: t({ uz: "Katta tuzatishlar", en: "Major revision", ru: "Серьезная доработка" }), icon: AlertTriangle },
-    { id: "reject", label: t({ uz: "Rad etish", en: "Reject", ru: "Отклонить" }), icon: XCircle },
-  ] as const;
-
-  const scoreLabels = {
-    scientificSignificance: t({ uz: "Ilmiy ahamiyati va dolzarbligi", en: "Scientific value and relevance", ru: "Научная значимость и актуальность" }),
-    methodology: t({ uz: "Metodologiya va yondashuv", en: "Methodology and approach", ru: "Методология и подход" }),
-    structureClarity: t({ uz: "Tuzilishi va fikrning aniqligi", en: "Structure and clarity", ru: "Структура и ясность изложения" }),
-    originality: t({ uz: "Originallik va yangilik darajasi", en: "Originality and novelty", ru: "Оригинальность и новизна" }),
-  };
+  const isExpertOwner = user?.role === "reviewer" && reviewData.reviewerId === user.id;
+  const isReadOnly = reviewData.status === "submitted" || !isExpertOwner;
+  const currentRole = user?.role as string | undefined;
+  const backPath = currentRole === "author" ? "/dashboard/author" : currentRole === "publisher" ? "/dashboard/publisher" : "/dashboard/expert";
 
   return (
     <DashboardLayout>
       <PageTransition>
-        <div className="max-w-4xl mx-auto py-6">
-          <Link href={withLocale("/dashboard/reviewer")} className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary mb-6 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+        <div className="max-w-5xl mx-auto py-6">
+          <Link href={withLocale(backPath)} className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary mb-6 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
             {t({ uz: "Ortga qaytish", en: "Back", ru: "Назад" })}
           </Link>
 
-          <div className="mb-6">
-            <h2 className="text-3xl font-serif font-bold text-primary">
-              {t({ uz: "Ekspert Taqrizi", en: "Review form", ru: "Форма рецензии" })}
-            </h2>
+          <div className="mb-6 rounded-3xl bg-white border border-border shadow-sm p-8 text-center">
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-500 mb-3">
+              {t({ uz: "Universitet Nashriyot Portali", en: "University Publishing Portal", ru: "Университетский издательский портал" })}
+            </p>
+            <h2 className="text-2xl md:text-3xl font-serif font-bold text-primary leading-tight">{l(copy.title, locale)}</h2>
+            {reviewData.status === "submitted" && (
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                <Badge className={reviewData.classification === "positive" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-red-100 text-red-700 border-red-200"}>
+                  {getClassificationCopy(reviewData.classification, locale)}
+                </Badge>
+                <Badge className="bg-slate-100 text-slate-700 border-slate-200">
+                  {getLocalizedReviewVerdict(reviewData.verdict, locale)}
+                </Badge>
+              </div>
+            )}
           </div>
 
-          <Card className="p-6 mb-8 border border-border shadow-md bg-white">
-            <h3 className="text-lg font-bold font-serif mb-4 flex items-center gap-2 text-slate-800">
-              <FileText className="h-5 w-5 text-primary" />
-              {t({ uz: "Asar ma'lumotlari", en: "Submission details", ru: "Данные о работе" })}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
-              <div>
-                <p className="text-slate-500 mb-1">{t({ uz: "Asar nomi", en: "Title", ru: "Название работы" })}</p>
-                <p className="font-semibold text-slate-900">{review.submissionTitle}</p>
-              </div>
-              <div>
-                <p className="text-slate-500 mb-1">{t({ uz: "Adabiyot turi", en: "Literature type", ru: "Тип литературы" })}</p>
-                <p className="font-medium text-slate-900 bg-slate-100 px-2 py-0.5 rounded inline-block">
-                  {getLocalizedLiteratureType(review.submission?.literatureType, locale)}
-                </p>
-              </div>
-              <div>
-                <p className="text-slate-500 mb-1">{t({ uz: "Ilmiy yo'nalish", en: "Scientific direction", ru: "Научное направление" })}</p>
-                <p className="font-medium text-slate-900">
-                  {review.submission?.scientificDirection || t({ uz: "Noma'lum", en: "Unknown", ru: "Неизвестно" })}
-                </p>
-              </div>
-              <div>
-                <p className="text-slate-500 mb-1 flex items-center gap-1"><User className="h-4 w-4" />{t({ uz: "Muallif", en: "Author", ru: "Автор" })}</p>
-                <p className="font-medium text-slate-900">
-                  {review.submission?.authorName || t({ uz: "Noma'lum", en: "Unknown", ru: "Неизвестно" })}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <form onSubmit={handleSubmit}>
-            <Card className="p-8 mb-6 shadow-sm border border-border bg-white">
-              <h3 className="text-lg font-bold font-serif mb-6 border-b border-slate-100 pb-2 text-slate-800">
-                {t({ uz: "1. Baholash (1-10)", en: "1. Scoring (1-10)", ru: "1. Оценка (1-10)" })}
-              </h3>
-              <div className="space-y-8">
-                {Object.entries(scoreLabels).map(([key, label]) => (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <Section title={l(copy.section1, locale)}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(["authors", "title", "literatureType", "specialty", "educationLevel", "departmentFaculty"] as const).map((key) => (
                   <div key={key}>
-                    <div className="flex justify-between items-center mb-3">
-                      <label className="font-medium text-slate-700">{label}</label>
-                      <div className="flex items-center gap-3">
-                        <button type="button" disabled={isReadOnly} className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 disabled:opacity-50" onClick={() => handleScoreChange(key, scores[key as keyof typeof scores] - 1)}>-</button>
-                        <span className="text-xl font-bold font-serif text-primary w-10 text-center">{scores[key as keyof typeof scores]}</span>
-                        <button type="button" disabled={isReadOnly} className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 disabled:opacity-50" onClick={() => handleScoreChange(key, scores[key as keyof typeof scores] + 1)}>+</button>
-                      </div>
-                    </div>
-                    <div className="relative pt-2">
-                      <input type="range" min="1" max="10" value={scores[key as keyof typeof scores]} onChange={(event) => setScores({ ...scores, [key]: Number(event.target.value) })} disabled={isReadOnly} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary" />
-                      <div className="flex justify-between text-xs text-slate-400 mt-2 px-1">{Array.from({ length: 10 }, (_, index) => <span key={index}>{index + 1}</span>)}</div>
-                    </div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{l(fieldLabels[key], locale)}</label>
+                    <Input value={form[key]} onChange={(event) => update(key, event.target.value)} disabled={isReadOnly || key === "title"} />
                   </div>
                 ))}
               </div>
-            </Card>
+            </Section>
 
-            <Card className="p-8 mb-6 shadow-sm border border-border bg-white">
-              <h3 className="text-lg font-bold font-serif mb-6 border-b border-slate-100 pb-2 text-slate-800">
-                {t({ uz: "2. Fikr va mulohazalar", en: "2. Comments", ru: "2. Комментарии" })}
-              </h3>
-              <div className="space-y-6">
-                <div>
-                  <label className="block font-medium mb-2 text-slate-700">
-                    {t({ uz: "Muallif uchun izohlar", en: "Comments for the author", ru: "Комментарии для автора" })}
-                    <span className="text-slate-400 font-normal text-sm ml-1">
-                      {t({ uz: "(Muallif buni ko'radi)", en: "(Visible to the author)", ru: "(Автор это увидит)" })}
-                    </span>
-                  </label>
-                  <Textarea value={comments.commentsForAuthor} onChange={(event) => setComments({ ...comments, commentsForAuthor: event.target.value })} disabled={isReadOnly} className="min-h-[150px] bg-slate-50" placeholder={t({ uz: "Ishning kuchli va zaif tomonlari, tuzatish bo'yicha takliflar...", en: "Strengths, weaknesses, and revision suggestions...", ru: "Сильные и слабые стороны работы, предложения по доработке..." })} />
-                </div>
-                <div>
-                  <label className="block font-medium mb-2 text-slate-700">
-                    {t({ uz: "Muharrir uchun yopiq izohlar", en: "Confidential comments for the editor", ru: "Конфиденциальные комментарии для редактора" })}
-                    <span className="text-slate-400 font-normal text-sm ml-1">
-                      {t({ uz: "(Faqat muharrir ko'radi)", en: "(Visible only to the editor)", ru: "(Видно только редактору)" })}
-                    </span>
-                  </label>
-                  <Textarea value={comments.commentsForEditor} onChange={(event) => setComments({ ...comments, commentsForEditor: event.target.value })} disabled={isReadOnly} className="min-h-[100px] bg-amber-50/50 border-amber-200 focus-visible:ring-amber-500" placeholder={t({ uz: "Qo'shimcha maxfiy xulosalar...", en: "Additional confidential remarks...", ru: "Дополнительные конфиденциальные замечания..." })} />
-                </div>
-              </div>
-            </Card>
+            <Section title={l(copy.section2, locale)}>
+              <RadioGroup name="literatureType" value={form.literatureType} group="literatureType" locale={locale} disabled={isReadOnly} onChange={(value) => update("literatureType", value)} />
+              <Textarea value={form.literatureTypeNote} onChange={(event) => update("literatureTypeNote", event.target.value)} disabled={isReadOnly} className="mt-4" placeholder={l(copy.note, locale)} />
+            </Section>
 
-            <Card className="p-8 mb-8 border-t-4 border-t-primary shadow-md bg-white">
-              <h3 className="text-lg font-bold font-serif mb-6 text-slate-800">
-                {t({ uz: "3. Yakuniy xulosa", en: "3. Final verdict", ru: "3. Итоговый вердикт" })}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {verdictOptions.map((option) => (
-                  <label
-                    key={option.id}
-                    className={`cursor-pointer flex flex-col items-center justify-center p-6 rounded-xl border-2 font-bold text-center transition-all ${
-                      verdict === option.id ? VERDICT_STYLES[option.id] : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
-                    }`}
-                  >
-                    <input type="radio" name="verdict" className="hidden" value={option.id} checked={verdict === option.id} onChange={() => setVerdict(option.id)} disabled={isReadOnly} />
-                    <option.icon className={`h-8 w-8 mb-3 ${verdict === option.id ? VERDICT_ICON_STYLES[option.id] : "text-slate-400"}`} />
-                    {option.label}
-                  </label>
+            <Section title={l(copy.section3, locale)}>
+              <RadioGroup name="curriculumCompliance" value={form.curriculumCompliance} group="compliance" locale={locale} disabled={isReadOnly} onChange={(value) => update("curriculumCompliance", value)} />
+              <Textarea value={form.curriculumNote} onChange={(event) => update("curriculumNote", event.target.value)} disabled={isReadOnly} className="mt-4" placeholder={l(copy.note, locale)} />
+            </Section>
+
+            <Section title={l(copy.section4, locale)}>
+              <RadioGroup name="syllabusCompliance" value={form.syllabusCompliance} group="compliance" locale={locale} disabled={isReadOnly} onChange={(value) => update("syllabusCompliance", value)} />
+              <Textarea value={form.syllabusNote} onChange={(event) => update("syllabusNote", event.target.value)} disabled={isReadOnly} className="mt-4" placeholder={l(copy.note, locale)} />
+            </Section>
+
+            <Section title={l(copy.section5, locale)}>
+              <p className="text-sm text-slate-500 mb-3">
+                {t({
+                  uz: "Asarning asosiy maqsadi, mavzuning dolzarbligi va bugungi kun talablariga mosligini bayon qiling.",
+                  en: "Describe the main purpose, relevance of the topic, and compliance with current requirements.",
+                  ru: "Опишите основную цель, актуальность темы и соответствие современным требованиям.",
+                })}
+              </p>
+              <Textarea value={form.purposeRelevance} onChange={(event) => update("purposeRelevance", event.target.value)} disabled={isReadOnly} className="min-h-[130px]" />
+            </Section>
+
+            <Section title={l(copy.section6, locale)}>
+              <p className="text-sm text-slate-500 mb-3">
+                {t({
+                  uz: "Materialning ilmiy asoslanganligi, nazariy va amaliy jihatlari, manbalardan foydalanish darajasini baholang.",
+                  en: "Evaluate scientific grounding, theoretical and practical aspects, and use of sources.",
+                  ru: "Оцените научную обоснованность, теоретические и практические аспекты, использование источников.",
+                })}
+              </p>
+              <Textarea value={form.scientificLevel} onChange={(event) => update("scientificLevel", event.target.value)} disabled={isReadOnly} className="min-h-[130px]" />
+            </Section>
+
+            <Section title={l(copy.section7, locale)}>
+              <p className="text-sm text-slate-500 mb-3">
+                {t({
+                  uz: "Materialning mantiqiy ketma-ketligi, bob va bo'limlarning joylashuvi hamda tushunarliligini yozing.",
+                  en: "Describe logical sequence, chapter/section arrangement, and clarity.",
+                  ru: "Опишите логическую последовательность, расположение глав и разделов, понятность изложения.",
+                })}
+              </p>
+              <Textarea value={form.structurePresentation} onChange={(event) => update("structurePresentation", event.target.value)} disabled={isReadOnly} className="min-h-[130px]" />
+            </Section>
+
+            <Section title={l(copy.section8, locale)}>
+              <RadioGroup name="universityImportance" value={form.universityImportance} group="importance" locale={locale} disabled={isReadOnly} onChange={(value) => update("universityImportance", value)} />
+              <Textarea value={form.universityImportanceBasis} onChange={(event) => update("universityImportanceBasis", event.target.value)} disabled={isReadOnly} className="mt-4" placeholder={l(copy.basis, locale)} />
+            </Section>
+
+            <Section title={l(copy.section9, locale)}>
+              <RadioGroup name="regulatoryCompliance" value={form.regulatoryCompliance} group="compliance" locale={locale} disabled={isReadOnly} onChange={(value) => update("regulatoryCompliance", value)} />
+              <Textarea value={form.regulatoryNote} onChange={(event) => update("regulatoryNote", event.target.value)} disabled={isReadOnly} className="mt-4" placeholder={l(copy.note, locale)} />
+            </Section>
+
+            <Section title={l(copy.section10, locale)}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(["scientificity", "sources", "languageStyle", "practicalImportance"] as const).map((key) => (
+                  <div key={key}>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{l(fieldLabels[key], locale)}</label>
+                    <Textarea value={form[key]} onChange={(event) => update(key, event.target.value)} disabled={isReadOnly} className="min-h-[110px]" />
+                  </div>
                 ))}
               </div>
-              {isReadOnly && verdict && (
-                <p className="mt-5 text-sm text-slate-500">
-                  {t({ uz: "Saqlangan xulosa", en: "Saved verdict", ru: "Сохраненный вердикт" })}: {getLocalizedReviewVerdict(verdict, locale)}
-                </p>
-              )}
-            </Card>
+            </Section>
+
+            <Section title={l(copy.sectionScores, locale)}>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {[
+                  { key: "scientificSignificanceScore", label: t({ uz: "Ilmiy ahamiyat", en: "Scientific significance", ru: "Научная значимость" }) },
+                  { key: "methodologyScore", label: t({ uz: "Metodologiya", en: "Methodology", ru: "Методология" }) },
+                  { key: "structureClarityScore", label: t({ uz: "Tuzilish ravshanligi", en: "Structure clarity", ru: "Ясность структуры" }) },
+                  { key: "originalityScore", label: t({ uz: "Originalligi", en: "Originality", ru: "Оригинальность" }) },
+                ].map((item) => (
+                  <div key={item.key}>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{item.label}</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={form[item.key as keyof FormState]}
+                      onChange={(event) => update(item.key as keyof FormState, event.target.value)}
+                      disabled={isReadOnly}
+                      placeholder="1-10"
+                    />
+                  </div>
+                ))}
+              </div>
+            </Section>
+
+            <Section title={l(copy.section11, locale)}>
+              <RadioGroup name="finalRecommendation" value={form.finalRecommendation} group="finalRecommendation" locale={locale} disabled={isReadOnly} onChange={(value) => update("finalRecommendation", value)} />
+              <Textarea value={form.finalNote} onChange={(event) => update("finalNote", event.target.value)} disabled={isReadOnly} className="mt-4 min-h-[120px]" placeholder={l(copy.note, locale)} />
+              <Textarea value={form.confidentialEditorNote} onChange={(event) => update("confidentialEditorNote", event.target.value)} disabled={isReadOnly} className="mt-4 bg-amber-50/50 border-amber-200" placeholder={l(copy.confidential, locale)} />
+            </Section>
+
+            <Section title={l(copy.section12, locale)}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(["expertFullName", "expertDegree", "workplace", "signature", "signedDate"] as const).map((key) => (
+                  <div key={key}>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{l(fieldLabels[key], locale)}</label>
+                    <Input type={key === "signedDate" ? "date" : "text"} value={form[key]} onChange={(event) => update(key, event.target.value)} disabled={isReadOnly} />
+                  </div>
+                ))}
+              </div>
+            </Section>
 
             {!isReadOnly && (
-              <div className="flex justify-end sticky bottom-6 z-10">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 sticky bottom-6 z-10">
+                <Button type="button" size="lg" variant="outline" className="shadow-lg bg-white text-lg px-8 h-14" onClick={handleSaveDraft} disabled={submitMutation.isPending}>
+                  <Save className="mr-3 h-5 w-5" />
+                  {l(copy.saveDraft, locale)}
+                </Button>
                 <Button type="submit" size="lg" className="shadow-xl shadow-primary/30 text-lg px-10 h-14 bg-primary text-white hover:bg-primary/90" disabled={submitMutation.isPending}>
                   <Send className="mr-3 h-5 w-5" />
-                  {submitMutation.isPending
-                    ? t({ uz: "Yuborilmoqda...", en: "Submitting...", ru: "Отправка..." })
-                    : t({ uz: "Taqrizni yuborish", en: "Submit review", ru: "Отправить рецензию" })}
+                  {submitMutation.isPending ? t({ uz: "Yuborilmoqda...", en: "Submitting...", ru: "Отправка..." }) : l(copy.submit, locale)}
                 </Button>
               </div>
             )}

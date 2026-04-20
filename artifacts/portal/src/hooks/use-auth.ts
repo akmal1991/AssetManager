@@ -34,7 +34,7 @@ export function useAuth() {
     query: {
       enabled: !!token,
       retry: false,
-    },
+    } as any,
   });
 
   useEffect(() => {

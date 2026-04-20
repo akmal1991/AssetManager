@@ -9,8 +9,16 @@ import * as XLSX from "xlsx";
 
 const router = Router();
 
+function normalizeRole(role: unknown) {
+  return role === "expert" ? "reviewer" : String(role ?? "author");
+}
+
+function roleDisplayName(role: string) {
+  return ({ author: "Author", editor: "Expert", reviewer: "Expert", publisher: "Publisher", admin: "Administrator" } as Record<string, string>)[role] ?? role;
+}
+
 /* ── STATS ── */
-router.get("/stats", requireAuth, requireRole("admin", "editor"), async (_req, res) => {
+router.get("/stats", requireAuth, requireRole("admin", "editor", "publisher"), async (_req, res) => {
   try {
     const subStats = await db
       .select({ status: submissionsTable.status, count: sql<number>`count(*)` })
@@ -31,6 +39,8 @@ router.get("/stats", requireAuth, requireRole("admin", "editor"), async (_req, r
       totalAuthors: byRole("author"),
       totalEditors: byRole("editor"),
       totalReviewers: byRole("reviewer"),
+      totalExperts: byRole("editor") + byRole("reviewer"),
+      totalPublishers: byRole("publisher"),
       totalAdmins: byRole("admin"),
       published: bySub("published"),
       submissionsByStatus: {
@@ -50,7 +60,21 @@ router.get("/stats", requireAuth, requireRole("admin", "editor"), async (_req, r
 /* ── CREATE USER ── */
 router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const { fullName, email, password, role, departmentId, scientificDegree, position } = req.body;
+    const {
+      fullName,
+      email,
+      password,
+      role: requestedRole = "author",
+      departmentId,
+      scientificDegree,
+      position,
+      expertOrganization,
+      expertBio,
+      expertSpecialties,
+      expertIsActive,
+    } = req.body ?? {};
+    const role = normalizeRole(requestedRole);
+    const allowedRoles = ["author", "editor", "reviewer", "publisher", "admin"];
     if (!fullName || !email || !password) {
       res.status(400).json({ error: "fullName, email va password majburiy" });
       return;
@@ -60,20 +84,30 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
       res.status(409).json({ error: "Bu email allaqachon ro'yxatdan o'tgan" });
       return;
     }
+    if (!allowedRoles.includes(role)) {
+      res.status(400).json({ error: "Valid role required" });
+      return;
+    }
     const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db.insert(usersTable).values({
       fullName,
       email,
       passwordHash,
-      role: role || "author",
+      role,
       departmentId: departmentId || null,
       scientificDegree: scientificDegree || "none",
       position: position || "teacher",
+      expertOrganization: role === "reviewer" && expertOrganization ? String(expertOrganization).trim() : null,
+      expertBio: role === "reviewer" && expertBio ? String(expertBio).trim() : null,
+      expertSpecialties: role === "reviewer" && Array.isArray(expertSpecialties)
+        ? expertSpecialties.map((item) => String(item).trim()).filter(Boolean).slice(0, 20)
+        : [],
+      expertIsActive: role === "reviewer" ? expertIsActive !== false : false,
     }).returning();
 
     await logAction(req, "user_registered", {
       entityType: "user", entityId: user.id,
-      detail: `Admin created user: ${email} [${role || "author"}]`,
+      detail: `Admin created user: ${email} [${roleDisplayName(role)}]`,
     });
     res.status(201).json(user);
   } catch (err: any) {
@@ -86,7 +120,7 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
   try {
     const id = parseInt(req.params.id);
     const authUser = (req as any).user;
-    if (authUser.userId === id) {
+    if (authUser.id === id) {
       res.status(400).json({ error: "O'zingizni o'chira olmaysiz" });
       return;
     }
@@ -210,7 +244,7 @@ router.get("/export/users", requireAuth, requireRole("admin"), async (req, res) 
     const ws = XLSX.utils.json_to_sheet(
       users.map(u => ({
         ...u,
-        Rol: { author: "Muallif", editor: "Muharrir", reviewer: "Taqrizchi", admin: "Administrator" }[u.Rol] || u.Rol,
+        Rol: { author: "Muallif", editor: "Ekspert", reviewer: "Ekspert", publisher: "Noshir", admin: "Administrator" }[u.Rol] || u.Rol,
         "Ro'yxatdan o'tgan sana": u["Ro'yxatdan o'tgan sana"]
           ? new Date(u["Ro'yxatdan o'tgan sana"]).toLocaleDateString("uz-UZ") : "",
       }))
@@ -229,7 +263,7 @@ router.get("/export/users", requireAuth, requireRole("admin"), async (req, res) 
 });
 
 /* Export: all submissions */
-router.get("/export/submissions", requireAuth, requireRole("admin"), async (req, res) => {
+router.get("/export/submissions", requireAuth, requireRole("admin", "editor", "publisher"), async (req, res) => {
   try {
     const rows = await db
       .select({
@@ -239,7 +273,7 @@ router.get("/export/submissions", requireAuth, requireRole("admin"), async (req,
         "Muallif email": usersTable.email,
         "Tur": submissionsTable.literatureType,
         "Holat": submissionsTable.status,
-        "Muharrir izohi": submissionsTable.editorNotes,
+        "Ekspert izohi": submissionsTable.editorNotes,
         "Yuborilgan sana": submissionsTable.createdAt,
         "Yangilangan sana": submissionsTable.updatedAt,
       })
@@ -256,12 +290,11 @@ router.get("/export/submissions", requireAuth, requireRole("admin"), async (req,
       published: "Nashr qilindi",
     };
     const TYPE_UZ: Record<string, string> = {
-      textbook: "Darslik",
-      monograph: "Monografiya",
-      manual: "O'quv qo'llanma",
-      tutorial: "Uslubiy ko'rsatma",
-      lecture_notes: "Ma'ruza matni",
-      workbook: "Amaliy qo'llanma",
+      darslik: "Darslik",
+      oquv_qollanma: "O'quv qo'llanma",
+      monografiya: "Monografiya",
+      oquv_uslubiy_qollanma: "O'quv-uslubiy qo'llanma",
+      uslubiy_korsatma: "Uslubiy ko'rsatma",
     };
 
     const ws = XLSX.utils.json_to_sheet(
@@ -287,33 +320,28 @@ router.get("/export/submissions", requireAuth, requireRole("admin"), async (req,
 });
 
 /* Export: all reviews */
-router.get("/export/reviews", requireAuth, requireRole("admin"), async (req, res) => {
+router.get("/export/reviews", requireAuth, requireRole("admin", "editor", "publisher"), async (req, res) => {
   try {
-    const reviewerAlias = db.$with("reviewer_alias").as(
-      db.select({ id: usersTable.id, fullName: usersTable.fullName, email: usersTable.email }).from(usersTable)
-    );
-    const authorAlias = db.$with("author_alias").as(
-      db.select({ id: usersTable.id, fullName: usersTable.fullName }).from(usersTable)
-    );
-
     const rows = await db
       .select({
-        "Taqriz ID": reviewsTable.id,
+        "Xulosa ID": reviewsTable.id,
         "Ariza sarlavhasi": submissionsTable.title,
         "Ariza turi": submissionsTable.literatureType,
         "Muallif": usersTable.fullName,
-        "Taqrizchi ID": reviewsTable.reviewerId,
+        "Ekspert ID": reviewsTable.reviewerId,
         "Holat": reviewsTable.status,
-        "Umumiy baho": reviewsTable.overallScore,
-        "Ilmiy qiymat": reviewsTable.scientificValue,
-        "Amaliy qiymat": reviewsTable.practicalValue,
+        "Ilmiy ahamiyat": reviewsTable.scientificSignificance,
+        "Metodologiya": reviewsTable.methodology,
+        "Tuzilish ravshanligi": reviewsTable.structureClarity,
         "Originalligi": reviewsTable.originality,
-        "Adabiyotlar": reviewsTable.literatureReview,
-        "Yozim sifati": reviewsTable.writingQuality,
-        "Xulosa": reviewsTable.conclusion,
-        "Izoh": reviewsTable.notes,
-        "Yakunlangan sana": reviewsTable.completedAt,
-        "Tayinlangan sana": reviewsTable.createdAt,
+        "Xulosa": reviewsTable.conclusionSummary,
+        "Tavsiyalar": reviewsTable.recommendation,
+        "Verdikt": reviewsTable.verdict,
+        "Turkum": reviewsTable.classification,
+        "Muallifga izoh": reviewsTable.commentsForAuthor,
+        "Ekspert jarayoniga izoh": reviewsTable.commentsForEditor,
+        "Yakunlangan sana": reviewsTable.submittedAt,
+        "Tayinlangan sana": reviewsTable.assignedAt,
       })
       .from(reviewsTable)
       .leftJoin(submissionsTable, eq(reviewsTable.submissionId, submissionsTable.id))
@@ -323,14 +351,22 @@ router.get("/export/reviews", requireAuth, requireRole("admin"), async (req, res
     const ws = XLSX.utils.json_to_sheet(
       rows.map(r => ({
         ...r,
-        "Ariza turi": { textbook: "Darslik", monograph: "Monografiya", manual: "O'quv qo'llanma" }[r["Ariza turi"] || ""] || r["Ariza turi"],
-        "Holat": { pending: "Kutilmoqda", in_progress: "Jarayonda", completed: "Tugatildi" }[r["Holat"] || ""] || r["Holat"],
+        "Ariza turi": {
+          darslik: "Darslik",
+          oquv_qollanma: "O'quv qo'llanma",
+          monografiya: "Monografiya",
+          oquv_uslubiy_qollanma: "O'quv-uslubiy qo'llanma",
+          uslubiy_korsatma: "Uslubiy ko'rsatma",
+        }[r["Ariza turi"] || ""] || r["Ariza turi"],
+        "Holat": { pending: "Kutilmoqda", submitted: "Yuborilgan" }[r["Holat"] || ""] || r["Holat"],
+        "Verdikt": { accept: "Qabul qilish", minor_revision: "Kichik tuzatish", major_revision: "Qayta ishlash", reject: "Rad etish" }[r["Verdikt"] || ""] || r["Verdikt"],
+        "Turkum": { positive: "Ijobiy", negative: "Salbiy" }[r["Turkum"] || ""] || r["Turkum"],
         "Yakunlangan sana": r["Yakunlangan sana"] ? new Date(r["Yakunlangan sana"]).toLocaleDateString("uz-UZ") : "",
         "Tayinlangan sana": r["Tayinlangan sana"] ? new Date(r["Tayinlangan sana"]).toLocaleDateString("uz-UZ") : "",
       }))
     );
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Taqrizlar");
+    XLSX.utils.book_append_sheet(wb, ws, "Ekspert xulosalari");
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
     await logAction(req, "export_reviews", { detail: `Reviews Excel export (${rows.length} rows)` });
@@ -343,7 +379,7 @@ router.get("/export/reviews", requireAuth, requireRole("admin"), async (req, res
 });
 
 /* Export: statistics summary */
-router.get("/export/stats", requireAuth, requireRole("admin"), async (req, res) => {
+router.get("/export/stats", requireAuth, requireRole("admin", "editor", "publisher"), async (req, res) => {
   try {
     const subStats = await db
       .select({ status: submissionsTable.status, count: sql<number>`count(*)` })
@@ -359,15 +395,21 @@ router.get("/export/stats", requireAuth, requireRole("admin"), async (req, res) 
       accepted: "Qabul qilindi", rejected: "Rad etildi", published: "Nashr qilindi",
     };
     const ROLE_UZ: Record<string, string> = {
-      author: "Mualliflar", editor: "Muharrirlar", reviewer: "Taqrizchilar", admin: "Adminlar",
+      author: "Mualliflar", editor: "Ekspertlar", reviewer: "Ekspertlar", publisher: "Noshirlar", admin: "Adminlar",
     };
 
     const wsStatus = XLSX.utils.json_to_sheet(
       subStats.map(r => ({ "Holat": STATUS_UZ[r.status] || r.status, "Soni": Number(r.count) }))
     );
-    const wsUsers = XLSX.utils.json_to_sheet(
-      userStats.map(r => ({ "Rol": ROLE_UZ[r.role] || r.role, "Soni": Number(r.count) }))
+    const combinedUserStats = Object.values(
+      userStats.reduce<Record<string, { Rol: string; Soni: number }>>((acc, row) => {
+        const roleLabel = ROLE_UZ[row.role] || row.role;
+        acc[roleLabel] = acc[roleLabel] ?? { Rol: roleLabel, Soni: 0 };
+        acc[roleLabel].Soni += Number(row.count);
+        return acc;
+      }, {}),
     );
+    const wsUsers = XLSX.utils.json_to_sheet(combinedUserStats);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsStatus, "Arizalar holati");
     XLSX.utils.book_append_sheet(wb, wsUsers, "Foydalanuvchilar roli");

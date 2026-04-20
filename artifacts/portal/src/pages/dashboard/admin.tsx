@@ -20,7 +20,7 @@ import {
   getGetAuditLogsQueryOptions,
   getGetEmailTemplatesQueryOptions,
 } from "@workspace/api-client-react";
-import { Card, PageTransition, LoadingSpinner, Badge, Select, Button, Input } from "@/components/ui/shared";
+import { Card, PageTransition, LoadingSpinner, Badge, Select, Button, Input, Textarea } from "@/components/ui/shared";
 import {
   Users, FileText, CheckCircle, Shield, Search, Trash2, Plus, Activity,
   BookOpen, Mail, Settings2, LayoutDashboard, Edit3, Save, ToggleLeft, ToggleRight,
@@ -32,8 +32,17 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { cn, formatDate, STATUS_COLORS, STATUS_LABELS, LITERATURE_TYPES } from "@/lib/utils";
+import {
+  cn,
+  formatDate,
+  getLocalizedLiteratureType,
+  getLocalizedRoleLabel,
+  getLocalizedStatusLabel,
+  STATUS_COLORS,
+} from "@/lib/utils";
 import { Link } from "wouter";
+import { updateExpertProfile } from "@/lib/experts";
+import { useLocale } from "@/lib/i18n";
 
 /* ── helpers ── */
 function getSection(path: string) {
@@ -43,8 +52,9 @@ function getSection(path: string) {
 
 const ROLE_MAP: Record<string, { label: string; cls: string }> = {
   admin:    { label: "Admin",     cls: "bg-red-50 text-red-700 border-red-200" },
-  editor:   { label: "Muharrir",  cls: "bg-violet-50 text-violet-700 border-violet-200" },
-  reviewer: { label: "Taqrizchi", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  editor:   { label: "Ekspert",  cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  reviewer: { label: "Ekspert", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  publisher:{ label: "Noshir",    cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   author:   { label: "Muallif",   cls: "bg-blue-50 text-blue-700 border-blue-200" },
 };
 
@@ -76,6 +86,7 @@ const ACTION_META: Record<string, { icon: any; color: string; label: string }> =
   password_reset:            { icon: Lock,           color: "bg-amber-100 text-amber-700",    label: "Parol tiklandi" },
   submission_created:        { icon: FileText,       color: "bg-blue-100 text-blue-700",      label: "Yangi ariza" },
   submission_status_changed: { icon: Activity,      color: "bg-amber-100 text-amber-700",    label: "Ariza holati" },
+  expert_assigned:           { icon: UserCheck,      color: "bg-indigo-100 text-indigo-700",  label: "Ekspert tayinlandi" },
   email_template_updated:    { icon: Mail,           color: "bg-pink-100 text-pink-700",      label: "Shablon yangilandi" },
   export_users:              { icon: Download,       color: "bg-teal-100 text-teal-700",      label: "Export: foydalanuvchilar" },
   export_submissions:        { icon: Download,       color: "bg-teal-100 text-teal-700",      label: "Export: arizalar" },
@@ -107,7 +118,8 @@ async function downloadExcel(url: string, filename: string, setLoading: (v: bool
 /* ════════════════════════════════ COMPONENT ════════════════════════════════ */
 export default function AdminDashboard() {
   const [location] = useLocation();
-  const section = getSection(location);
+  const { locale, stripLocale, t, withLocale } = useLocale();
+  const section = getSection(stripLocale(location));
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -143,6 +155,13 @@ export default function AdminDashboard() {
   const [resetTarget, setResetTarget] = useState<{ id: number; name: string } | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [showNewPwd, setShowNewPwd]   = useState(false);
+  const [editingExpert, setEditingExpert] = useState<any | null>(null);
+  const [expertForm, setExpertForm] = useState({
+    expertOrganization: "",
+    expertBio: "",
+    expertSpecialties: "",
+    expertIsActive: true,
+  });
 
   /* ── Local state: create user form ── */
   const [form, setForm] = useState({
@@ -220,6 +239,24 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleSaveExpertProfile(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingExpert) return;
+    try {
+      await updateExpertProfile(editingExpert.id, {
+        expertOrganization: expertForm.expertOrganization,
+        expertBio: expertForm.expertBio,
+        expertSpecialties: expertForm.expertSpecialties.split(",").map((item) => item.trim()).filter(Boolean),
+        expertIsActive: expertForm.expertIsActive,
+      });
+      toast({ title: "Ekspert profili yangilandi" });
+      setEditingExpert(null);
+      refetchUsers();
+    } catch (err: any) {
+      toast({ title: "Xatolik", description: err?.message || "Ekspert profilini saqlab bo'lmadi", variant: "destructive" });
+    }
+  }
+
   async function handleCreateDept(e: React.FormEvent) {
     e.preventDefault();
     if (!newDeptName.trim()) return;
@@ -283,27 +320,75 @@ export default function AdminDashboard() {
     const matchSearch =
       u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
       u.email.toLowerCase().includes(userSearch.toLowerCase());
-    const matchRole = roleFilter === "all" || u.role === roleFilter;
+    const matchRole =
+      roleFilter === "all" ||
+      (roleFilter === "experts" ? u.role === "reviewer" || u.role === "editor" : u.role === roleFilter);
     return matchSearch && matchRole;
   });
+  const expertUsers = (users ?? []).filter((user: any) => user.role === "reviewer" || user.role === "editor");
+  const expertRoleCount = ((stats as any)?.totalExperts ?? 0) || ((stats?.totalReviewers ?? 0) + (stats?.totalEditors ?? 0));
 
   const barData = [
-    { name: "Yuborilgan", cnt: stats?.submissionsByStatus?.submitted         ?? 0, fill: "#3b82f6" },
-    { name: "Taqrizda",   cnt: stats?.submissionsByStatus?.under_review       ?? 0, fill: "#f59e0b" },
-    { name: "Tuzatish",   cnt: stats?.submissionsByStatus?.revision_required  ?? 0, fill: "#f97316" },
-    { name: "Qabul",      cnt: stats?.submissionsByStatus?.accepted            ?? 0, fill: "#10b981" },
-    { name: "Rad",        cnt: stats?.submissionsByStatus?.rejected            ?? 0, fill: "#ef4444" },
-    { name: "Nashr",      cnt: stats?.submissionsByStatus?.published           ?? 0, fill: "#8b5cf6" },
+    { name: t({ uz: "Yuborilgan", en: "Submitted", ru: "Отправлено" }), cnt: stats?.submissionsByStatus?.submitted         ?? 0, fill: "#3b82f6" },
+    { name: t({ uz: "Taqrizda", en: "In review", ru: "На рецензии" }),   cnt: stats?.submissionsByStatus?.under_review       ?? 0, fill: "#f59e0b" },
+    { name: t({ uz: "Tuzatish", en: "Revision", ru: "Доработка" }),   cnt: stats?.submissionsByStatus?.revision_required  ?? 0, fill: "#f97316" },
+    { name: t({ uz: "Qabul", en: "Accepted", ru: "Принято" }),      cnt: stats?.submissionsByStatus?.accepted            ?? 0, fill: "#10b981" },
+    { name: t({ uz: "Rad", en: "Rejected", ru: "Отклонено" }),        cnt: stats?.submissionsByStatus?.rejected            ?? 0, fill: "#ef4444" },
+    { name: t({ uz: "Nashr", en: "Published", ru: "Опубликовано" }),      cnt: stats?.submissionsByStatus?.published           ?? 0, fill: "#8b5cf6" },
   ];
 
   const userRoleStats = [
-    { name: "Mualliflar",   value: stats?.totalAuthors   ?? 0, fill: "#3b82f6" },
-    { name: "Taqrizchilar", value: stats?.totalReviewers ?? 0, fill: "#f59e0b" },
-    { name: "Muharrirlar",  value: stats?.totalEditors   ?? 0, fill: "#8b5cf6" },
-    { name: "Adminlar",     value: stats?.totalAdmins    ?? 0, fill: "#ef4444" },
+    { name: t({ uz: "Mualliflar", en: "Authors", ru: "Авторы" }),   value: stats?.totalAuthors   ?? 0, fill: "#3b82f6" },
+    { name: t({ uz: "Ekspertlar", en: "Experts", ru: "Эксперты" }), value: expertRoleCount, fill: "#f59e0b" },
+    { name: t({ uz: "Noshirlar", en: "Publishers", ru: "Издатели" }),    value: (stats as any)?.totalPublishers ?? 0, fill: "#10b981" },
+    { name: t({ uz: "Adminlar", en: "Administrators", ru: "Администраторы" }),     value: stats?.totalAdmins    ?? 0, fill: "#ef4444" },
   ].filter(d => d.value > 0);
 
   const apiBase = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  const getDegreeLabel = (value: string) =>
+    ({
+      none: t({ uz: "Yo'q", en: "None", ru: "Нет" }),
+      bachelor: t({ uz: "Bakalavr", en: "Bachelor", ru: "Бакалавр" }),
+      master: t({ uz: "Magistr", en: "Master", ru: "Магистр" }),
+      phd: "PhD",
+      dsc: t({ uz: "Fan doktori (DSc)", en: "Doctor of Science (DSc)", ru: "Доктор наук (DSc)" }),
+      professor: t({ uz: "Professor", en: "Professor", ru: "Профессор" }),
+    })[value] ?? value;
+  const getPositionLabel = (value: string) =>
+    ({
+      teacher: t({ uz: "O'qituvchi", en: "Teacher", ru: "Преподаватель" }),
+      senior_teacher: t({ uz: "Katta o'qituvchi", en: "Senior teacher", ru: "Старший преподаватель" }),
+      assistant: t({ uz: "Assistent", en: "Assistant", ru: "Ассистент" }),
+      associate_professor: t({ uz: "Dotsent", en: "Associate professor", ru: "Доцент" }),
+      professor: t({ uz: "Professor", en: "Professor", ru: "Профессор" }),
+      department_head: t({ uz: "Kafedra mudiri", en: "Department head", ru: "Заведующий кафедрой" }),
+      dean: t({ uz: "Dekan", en: "Dean", ru: "Декан" }),
+    })[value] ?? value;
+  const getActionLabel = (action: string) =>
+    ({
+      user_login: t({ uz: "Tizimga kirish", en: "Sign in", ru: "Вход в систему" }),
+      user_logout: t({ uz: "Tizimdan chiqish", en: "Sign out", ru: "Выход из системы" }),
+      user_registered: t({ uz: "Yangi foydalanuvchi", en: "New user", ru: "Новый пользователь" }),
+      user_deleted: t({ uz: "Foydalanuvchi o'chirildi", en: "User deleted", ru: "Пользователь удален" }),
+      role_changed: t({ uz: "Rol o'zgartirildi", en: "Role changed", ru: "Роль изменена" }),
+      password_reset: t({ uz: "Parol tiklandi", en: "Password reset", ru: "Пароль сброшен" }),
+      submission_created: t({ uz: "Yangi ariza", en: "New submission", ru: "Новая заявка" }),
+      submission_status_changed: t({ uz: "Ariza holati", en: "Submission status", ru: "Статус заявки" }),
+      expert_assigned: t({ uz: "Ekspert tayinlandi", en: "Expert assigned", ru: "Эксперт назначен" }),
+      email_template_updated: t({ uz: "Shablon yangilandi", en: "Template updated", ru: "Шаблон обновлен" }),
+      export_users: t({ uz: "Export: foydalanuvchilar", en: "Export: users", ru: "Экспорт: пользователи" }),
+      export_submissions: t({ uz: "Export: arizalar", en: "Export: submissions", ru: "Экспорт: заявки" }),
+      export_reviews: t({ uz: "Export: taqrizlar", en: "Export: reviews", ru: "Экспорт: рецензии" }),
+      export_stats: t({ uz: "Export: statistika", en: "Export: statistics", ru: "Экспорт: статистика" }),
+    })[action] ?? action;
+  const formatAuditDetail = (detail: string | null | undefined) =>
+    detail
+      ?.replace(/\beditor\b/gi, t({ uz: "ekspert", en: "expert", ru: "эксперт" }))
+      .replace(/\breviewer\b/gi, t({ uz: "ekspert", en: "expert", ru: "эксперт" }))
+      .replace(/\bMuharrir\b/g, t({ uz: "Ekspert", en: "Expert", ru: "Эксперт" }))
+      .replace(/\bTaqrizchi\b/g, t({ uz: "Ekspert", en: "Expert", ru: "Эксперт" }))
+      .replace(/\bРедактор\b/g, t({ uz: "Ekspert", en: "Expert", ru: "Эксперт" }))
+      .replace(/\bРецензент\b/g, t({ uz: "Ekspert", en: "Expert", ru: "Эксперт" }));
 
   /* ═══════════════════════════ RENDER ═══════════════════════════ */
   return (
@@ -313,22 +398,24 @@ export default function AdminDashboard() {
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-serif font-bold text-primary">
-              {section === "overview"        && "Statistika"}
-              {section === "submissions"     && "Ilmiy ishlar"}
-              {section === "users"           && "👥 Foydalanuvchilar"}
-              {section === "dictionaries"    && "⚙️ Lug'at Sozlamalari"}
-              {section === "email-templates" && "📧 Email Shablonlari"}
-              {section === "reports"         && "📊 Excel Hisobotlar"}
-              {section === "logs"            && "📜 Audit Loglari"}
+              {section === "overview"        && t({ uz: "Statistika", en: "Statistics", ru: "Статистика" })}
+              {section === "submissions"     && t({ uz: "Ilmiy ishlar", en: "Scientific works", ru: "Научные работы" })}
+              {section === "users"           && t({ uz: "Foydalanuvchilar", en: "Users", ru: "Пользователи" })}
+              {section === "experts"         && t({ uz: "Ekspertlar ro'yxati", en: "Experts list", ru: "Список экспертов" })}
+              {section === "dictionaries"    && t({ uz: "Lug'at sozlamalari", en: "Dictionaries", ru: "Справочники" })}
+              {section === "email-templates" && t({ uz: "Email shablonlari", en: "Email templates", ru: "Почтовые шаблоны" })}
+              {section === "reports"         && t({ uz: "Excel hisobotlar", en: "Excel reports", ru: "Excel-отчеты" })}
+              {section === "logs"            && t({ uz: "Audit loglari", en: "Audit logs", ru: "Журнал аудита" })}
             </h2>
             <p className="text-muted-foreground text-sm mt-0.5">
-              {section === "overview"        && "Tizimning umumiy holati va faoliyat statistikasi"}
-              {section === "submissions"     && "Mualliflar yuborgan ilmiy ishlarni ko'rish va jarayon boshqaruviga o'tish"}
-              {section === "users"           && "Foydalanuvchilarni qo'shish, o'chirish, rollarni sozlash"}
-              {section === "dictionaries"    && "Kafedralar va ilmiy yo'nalishlar ro'yxatini boshqarish"}
-              {section === "email-templates" && "Avtomatik yuboriluvchi email xabarlarini sozlash"}
-              {section === "reports"         && "Barcha ma'lumotlarni Excel formatida yuklab olish"}
-              {section === "logs"            && "Tizimda amalga oshirilgan barcha harakatlar tarixi"}
+              {section === "overview"        && t({ uz: "Tizimning umumiy holati va faoliyat statistikasi", en: "Overall system health and activity statistics", ru: "Общее состояние системы и статистика активности" })}
+              {section === "submissions"     && t({ uz: "Mualliflar yuborgan ilmiy ishlarni ko'rish va jarayon boshqaruviga o'tish", en: "Review submitted works and move into workflow management", ru: "Просмотр отправленных работ и переход к управлению процессом" })}
+              {section === "users"           && t({ uz: "Foydalanuvchilarni qo'shish, o'chirish, rollarni sozlash", en: "Create, delete, and manage user roles", ru: "Создание, удаление и настройка ролей пользователей" })}
+              {section === "experts"         && t({ uz: "Ekspertlar bazasini yuritish, faollashtirish va profil ma'lumotlarini yangilash", en: "Maintain expert records, activation, and profile information", ru: "Ведение базы экспертов, активация и обновление профилей" })}
+              {section === "dictionaries"    && t({ uz: "Kafedralar va ilmiy yo'nalishlar ro'yxatini boshqarish", en: "Manage departments and scientific directions", ru: "Управление кафедрами и научными направлениями" })}
+              {section === "email-templates" && t({ uz: "Avtomatik yuboriluvchi email xabarlarini sozlash", en: "Configure automatic email notifications", ru: "Настройка автоматических email-уведомлений" })}
+              {section === "reports"         && t({ uz: "Barcha ma'lumotlarni Excel formatida yuklab olish", en: "Download all data in Excel format", ru: "Выгрузка всех данных в формате Excel" })}
+              {section === "logs"            && t({ uz: "Tizimda amalga oshirilgan barcha harakatlar tarixi", en: "History of all actions performed in the system", ru: "История всех действий, выполненных в системе" })}
             </p>
           </div>
           <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -344,16 +431,18 @@ export default function AdminDashboard() {
             ) : (
               <>
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-                  <KpiCard label="Jami foydalanuvchilar" value={stats?.totalUsers ?? 0}        icon={Users}       accent="blue"    />
-                  <KpiCard label="Taqrizchilar"           value={stats?.totalReviewers ?? 0}    icon={Shield}      accent="violet"  />
-                  <KpiCard label="Jami arizalar"          value={stats?.totalSubmissions ?? 0}  icon={FileText}    accent="amber"   />
-                  <KpiCard label="Nashr qilingan"         value={stats?.published ?? 0}          icon={CheckCircle} accent="emerald" />
+                  <KpiCard label={t({ uz: "Jami foydalanuvchilar", en: "Total users", ru: "Всего пользователей" })} value={stats?.totalUsers ?? 0}        icon={Users}       accent="blue"    />
+                  <KpiCard label={t({ uz: "Ekspertlar", en: "Experts", ru: "Эксперты" })}           value={expertRoleCount}    icon={Shield}      accent="violet"  />
+                  <KpiCard label={t({ uz: "Jami arizalar", en: "Total submissions", ru: "Всего заявок" })}          value={stats?.totalSubmissions ?? 0}  icon={FileText}    accent="amber"   />
+                  <KpiCard label={t({ uz: "Nashr qilingan", en: "Published", ru: "Опубликовано" })}         value={stats?.published ?? 0}          icon={CheckCircle} accent="emerald" />
                 </div>
 
                 <div className="grid lg:grid-cols-5 gap-5">
                   <Card className="lg:col-span-3 p-6">
                     <div className="flex items-center justify-between mb-5">
-                      <h3 className="font-bold font-serif text-slate-800">Arizalar holati bo'yicha</h3>
+                      <h3 className="font-bold font-serif text-slate-800">
+                        {t({ uz: "Arizalar holati bo'yicha", en: "Submissions by status", ru: "Заявки по статусам" })}
+                      </h3>
                       <button onClick={() => refetchStats()} className="text-muted-foreground hover:text-primary transition-colors">
                         <RefreshCw className="h-4 w-4" />
                       </button>
@@ -361,7 +450,7 @@ export default function AdminDashboard() {
                     {barData.every(d => d.cnt === 0) ? (
                       <div className="h-[240px] flex flex-col items-center justify-center">
                         <TrendingUp className="h-12 w-12 mb-3 text-slate-200" />
-                        <p className="text-sm text-slate-400">Ma'lumot yo'q</p>
+                        <p className="text-sm text-slate-400">{t({ uz: "Ma'lumot yo'q", en: "No data", ru: "Нет данных" })}</p>
                       </div>
                     ) : (
                       <div className="h-[240px]">
@@ -371,7 +460,7 @@ export default function AdminDashboard() {
                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                             <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} allowDecimals={false} />
                             <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
-                            <Bar dataKey="cnt" name="Arizalar" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                            <Bar dataKey="cnt" name={t({ uz: "Arizalar", en: "Submissions", ru: "Заявки" })} radius={[4, 4, 0, 0]} maxBarSize={40}>
                               {barData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                             </Bar>
                           </BarChart>
@@ -381,11 +470,13 @@ export default function AdminDashboard() {
                   </Card>
 
                   <Card className="lg:col-span-2 p-6">
-                    <h3 className="font-bold font-serif text-slate-800 mb-5">Foydalanuvchilar roli</h3>
+                    <h3 className="font-bold font-serif text-slate-800 mb-5">
+                      {t({ uz: "Foydalanuvchilar roli", en: "User roles", ru: "Роли пользователей" })}
+                    </h3>
                     {userRoleStats.length === 0 ? (
                       <div className="h-[240px] flex flex-col items-center justify-center">
                         <PieIcon className="h-12 w-12 mb-3 text-slate-200" />
-                        <p className="text-sm text-slate-400">Ma'lumot yo'q</p>
+                        <p className="text-sm text-slate-400">{t({ uz: "Ma'lumot yo'q", en: "No data", ru: "Нет данных" })}</p>
                       </div>
                     ) : (
                       <div className="h-[240px]">
@@ -405,10 +496,10 @@ export default function AdminDashboard() {
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: "Yangi arizalar",    value: stats?.submissionsByStatus?.submitted ?? 0,         color: "text-blue-600",    bg: "bg-blue-50" },
-                    { label: "Taqriz jarayonida", value: stats?.submissionsByStatus?.under_review ?? 0,      color: "text-amber-600",   bg: "bg-amber-50" },
-                    { label: "Tuzatish kerak",    value: stats?.submissionsByStatus?.revision_required ?? 0, color: "text-orange-600",  bg: "bg-orange-50" },
-                    { label: "Qabul qilingan",    value: stats?.submissionsByStatus?.accepted ?? 0,          color: "text-emerald-600", bg: "bg-emerald-50" },
+                    { label: t({ uz: "Yangi arizalar", en: "New submissions", ru: "Новые заявки" }),    value: stats?.submissionsByStatus?.submitted ?? 0,         color: "text-blue-600",    bg: "bg-blue-50" },
+                    { label: t({ uz: "Taqriz jarayonida", en: "In review", ru: "В рецензировании" }), value: stats?.submissionsByStatus?.under_review ?? 0,      color: "text-amber-600",   bg: "bg-amber-50" },
+                    { label: t({ uz: "Tuzatish kerak", en: "Revision required", ru: "Требуется доработка" }),    value: stats?.submissionsByStatus?.revision_required ?? 0, color: "text-orange-600",  bg: "bg-orange-50" },
+                    { label: t({ uz: "Qabul qilingan", en: "Accepted", ru: "Принято" }),    value: stats?.submissionsByStatus?.accepted ?? 0,          color: "text-emerald-600", bg: "bg-emerald-50" },
                   ].map(item => (
                     <div key={item.label} className={cn("rounded-xl p-4 flex items-center justify-between", item.bg)}>
                       <p className="text-xs font-medium text-slate-600">{item.label}</p>
@@ -427,20 +518,26 @@ export default function AdminDashboard() {
             <Card className="overflow-hidden shadow-sm">
               <div className="px-5 py-4 border-b border-border bg-white flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-bold font-serif text-slate-800">Yuborilgan ilmiy ishlar</h3>
+                  <h3 className="font-bold font-serif text-slate-800">
+                    {t({ uz: "Yuborilgan ilmiy ishlar", en: "Submitted scientific works", ru: "Отправленные научные работы" })}
+                  </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Yangi arizalar bu yerda ko'rinadi. Ekspert tayinlash va qaror qabul qilish uchun admin sifatida muharrir jarayoniga ham o'tishingiz mumkin.
+                    {t({
+                      uz: "Yangi arizalar bu yerda ko'rinadi. Ekspert tayinlash va qaror qabul qilish uchun admin sifatida ekspert jarayoniga ham o'tishingiz mumkin.",
+                      en: "New submissions appear here. As admin, you can also open the expert workflow to assign experts and make decisions.",
+                      ru: "Новые заявки отображаются здесь. Администратор также может перейти к экспертному процессу для назначения экспертов и принятия решений.",
+                    })}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => { refetchSubmissions(); refetchStats(); }}>
                     <RefreshCw className="h-3.5 w-3.5" />
-                    Yangilash
+                    {t({ uz: "Yangilash", en: "Refresh", ru: "Обновить" })}
                   </Button>
-                  <Link href="/dashboard/editor">
+                  <Link href={withLocale("/dashboard/editor")}>
                     <Button size="sm" className="h-8 text-xs gap-1.5">
                       <BookOpen className="h-3.5 w-3.5" />
-                      Jarayonni boshqarish
+                      {t({ uz: "Jarayonni boshqarish", en: "Manage workflow", ru: "Управлять процессом" })}
                     </Button>
                   </Link>
                 </div>
@@ -449,17 +546,19 @@ export default function AdminDashboard() {
               {submissionsLoading ? (
                 <div className="flex justify-center py-16"><LoadingSpinner /></div>
               ) : !(submissionsData?.items?.length) ? (
-                <div className="p-12 text-center text-slate-400 text-sm">Hali ilmiy ishlar yuborilmagan.</div>
+                <div className="p-12 text-center text-slate-400 text-sm">
+                  {t({ uz: "Hali ilmiy ishlar yuborilmagan.", en: "No scientific works have been submitted yet.", ru: "Научные работы пока не отправлены." })}
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider border-b border-border/70">
                       <tr>
-                        <th className="px-5 py-3 font-semibold">Sarlavha</th>
-                        <th className="px-5 py-3 font-semibold hidden lg:table-cell">Muallif</th>
-                        <th className="px-5 py-3 font-semibold">Turi</th>
-                        <th className="px-5 py-3 font-semibold">Holati</th>
-                        <th className="px-5 py-3 font-semibold hidden md:table-cell">Sana</th>
+                        <th className="px-5 py-3 font-semibold">{t({ uz: "Sarlavha", en: "Title", ru: "Название" })}</th>
+                        <th className="px-5 py-3 font-semibold hidden lg:table-cell">{t({ uz: "Muallif", en: "Author", ru: "Автор" })}</th>
+                        <th className="px-5 py-3 font-semibold">{t({ uz: "Turi", en: "Type", ru: "Тип" })}</th>
+                        <th className="px-5 py-3 font-semibold">{t({ uz: "Holati", en: "Status", ru: "Статус" })}</th>
+                        <th className="px-5 py-3 font-semibold hidden md:table-cell">{t({ uz: "Sana", en: "Date", ru: "Дата" })}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
@@ -467,18 +566,22 @@ export default function AdminDashboard() {
                         <tr key={submission.id} className={cn("hover:bg-slate-50/60 transition-colors", idx % 2 === 0 ? "bg-white" : "bg-slate-50/20")}>
                           <td className="px-5 py-3.5">
                             <p className="font-medium text-slate-800">{submission.title}</p>
-                            <p className="text-xs text-slate-400 mt-1">{submission.scientificDirection || "Yo'nalish ko'rsatilmagan"}</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {submission.scientificDirection || t({ uz: "Yo'nalish ko'rsatilmagan", en: "Direction not specified", ru: "Направление не указано" })}
+                            </p>
                           </td>
-                          <td className="px-5 py-3.5 hidden lg:table-cell text-slate-600">{submission.authorName || "Noma'lum"}</td>
+                          <td className="px-5 py-3.5 hidden lg:table-cell text-slate-600">
+                            {submission.authorName || t({ uz: "Noma'lum", en: "Unknown", ru: "Неизвестно" })}
+                          </td>
                           <td className="px-5 py-3.5 text-slate-600">
-                            {LITERATURE_TYPES[submission.literatureType as keyof typeof LITERATURE_TYPES] || submission.literatureType}
+                            {getLocalizedLiteratureType(submission.literatureType, locale)}
                           </td>
                           <td className="px-5 py-3.5">
                             <Badge className={cn("rounded-full px-3 py-0.5 border", STATUS_COLORS[submission.status as keyof typeof STATUS_COLORS])}>
-                              {STATUS_LABELS[submission.status as keyof typeof STATUS_LABELS] || submission.status}
+                              {getLocalizedStatusLabel(submission.status, locale)}
                             </Badge>
                           </td>
-                          <td className="px-5 py-3.5 hidden md:table-cell text-slate-400">{formatDate(submission.createdAt)}</td>
+                          <td className="px-5 py-3.5 hidden md:table-cell text-slate-400">{formatDate(submission.createdAt, locale)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -489,17 +592,214 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {section === "experts" && (
+          <div className="animate-in fade-in-0 duration-200 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-slate-500">
+                {t({
+                  uz: "Admin bu yerda ekspert akkauntlarini faollashtiradi, profilini to'ldiradi va kerak bo'lsa o'chiradi.",
+                  en: "Admins can activate expert accounts, complete profiles, and remove experts when needed.",
+                  ru: "Администратор может активировать аккаунты экспертов, заполнять профили и удалять экспертов при необходимости.",
+                })}
+              </div>
+              <Button
+                size="sm"
+                className="gap-2 shrink-0"
+                onClick={() => {
+                  setForm({ fullName: "", email: "", password: "", role: "expert", departmentId: "", scientificDegree: "none", position: "teacher" });
+                  setShowFormPwd(false);
+                  setShowCreateModal(true);
+                }}
+              >
+                <UserPlus className="h-4 w-4" />
+                {t({ uz: "Ekspert qo'shish", en: "Add expert", ru: "Добавить эксперта" })}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {expertUsers.map((expert: any) => (
+                <Card key={expert.id} className="p-5 border border-border shadow-sm">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="font-bold text-slate-900">{expert.fullName}</h3>
+                      <p className="text-sm text-slate-500">{expert.email}</p>
+                    </div>
+                    <Badge className={expert.expertIsActive ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"}>
+                      {expert.expertIsActive
+                        ? t({ uz: "Faol", en: "Active", ru: "Активен" })
+                        : t({ uz: "Nofaol", en: "Inactive", ru: "Неактивен" })}
+                    </Badge>
+                  </div>
+                  <div className="space-y-2 text-sm text-slate-600">
+                    <p><span className="font-semibold text-slate-800">{t({ uz: "Tashkilot", en: "Organization", ru: "Организация" })}:</span> {expert.expertOrganization || expert.departmentName || t({ uz: "Kiritilmagan", en: "Not provided", ru: "Не указано" })}</p>
+                    <p><span className="font-semibold text-slate-800">{t({ uz: "Mutaxassisliklar", en: "Specialties", ru: "Специализации" })}:</span> {(expert.expertSpecialties || []).join(", ") || t({ uz: "Kiritilmagan", en: "Not provided", ru: "Не указано" })}</p>
+                    <p className="line-clamp-3"><span className="font-semibold text-slate-800">Bio:</span> {expert.expertBio || t({ uz: "Kiritilmagan", en: "Not provided", ru: "Не указано" })}</p>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingExpert(expert);
+                        setExpertForm({
+                          expertOrganization: expert.expertOrganization || "",
+                          expertBio: expert.expertBio || "",
+                          expertSpecialties: (expert.expertSpecialties || []).join(", "),
+                          expertIsActive: Boolean(expert.expertIsActive),
+                        });
+                      }}
+                    >
+                      <Edit3 className="h-4 w-4 mr-2" />
+                      {t({ uz: "Profilni tahrirlash", en: "Edit profile", ru: "Редактировать профиль" })}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteUser(expert.id, expert.fullName)}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {t({ uz: "O'chirish", en: "Delete", ru: "Удалить" })}
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {showCreateModal && form.role === "expert" && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <Card className="w-full max-w-lg shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200">
+                  <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+                    <h3 className="font-bold font-serif text-lg text-slate-900 flex items-center gap-2">
+                      <UserPlus className="h-5 w-5 text-primary" />
+                      {t({ uz: "Yangi ekspert yaratish", en: "Create new expert", ru: "Создать нового эксперта" })}
+                    </h3>
+                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                        {t({ uz: "To'liq ismi", en: "Full name", ru: "ФИО" })} *
+                      </label>
+                      <Input
+                        placeholder={t({ uz: "Karimov Jasur Aliyevich", en: "John Smith", ru: "Иванов Иван Иванович" })}
+                        value={form.fullName}
+                        onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1.5">Email *</label>
+                      <Input
+                        type="email"
+                        placeholder="expert@uni.uz"
+                        value={form.email}
+                        onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                        {t({ uz: "Parol", en: "Password", ru: "Пароль" })} *
+                      </label>
+                      <div className="relative">
+                        <Input
+                          type={showFormPwd ? "text" : "password"}
+                          placeholder={t({ uz: "Kamida 6 belgi", en: "At least 6 characters", ru: "Минимум 6 символов" })}
+                          value={form.password}
+                          onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                          className="pr-10"
+                          minLength={6}
+                          required
+                        />
+                        <button type="button" onClick={() => setShowFormPwd(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                          {showFormPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                        {t({ uz: "Kafedra", en: "Department", ru: "Кафедра" })}
+                      </label>
+                      <Select value={form.departmentId} onChange={e => setForm(f => ({ ...f, departmentId: e.target.value }))} className="h-9 text-sm">
+                        <option value="">{t({ uz: "Tanlang", en: "Select", ru: "Выберите" })}</option>
+                        {(departments ?? []).map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </Select>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {t({
+                        uz: "Ekspert faol holatda yaratiladi. Keyin profil, tashkilot va mutaxassisliklarini shu bo'limda tahrirlashingiz mumkin.",
+                        en: "The expert will be created as active. You can edit the profile, organization, and specialties in this section afterwards.",
+                        ru: "Эксперт будет создан активным. Затем в этом разделе можно заполнить профиль, организацию и специализации.",
+                      })}
+                    </p>
+                    <div className="flex gap-3 pt-2">
+                      <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
+                        {t({ uz: "Bekor qilish", en: "Cancel", ru: "Отмена" })}
+                      </Button>
+                      <Button type="submit" className="flex-1" disabled={createUserMutation.isPending}>
+                        {createUserMutation.isPending
+                          ? t({ uz: "Yaratilmoqda...", en: "Creating...", ru: "Создание..." })
+                          : t({ uz: "Ekspert yaratish", en: "Create expert", ru: "Создать эксперта" })}
+                      </Button>
+                    </div>
+                  </form>
+                </Card>
+              </div>
+            )}
+
+            {editingExpert && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <Card className="w-full max-w-2xl shadow-2xl">
+                  <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+                    <h3 className="font-bold font-serif text-lg text-slate-900">
+                      {t({ uz: "Ekspert profilini tahrirlash", en: "Edit expert profile", ru: "Редактировать профиль эксперта" })}
+                    </h3>
+                    <button onClick={() => setEditingExpert(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleSaveExpertProfile} className="p-6 space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1.5">{t({ uz: "Tashkilot", en: "Organization", ru: "Организация" })}</label>
+                      <Input value={expertForm.expertOrganization} onChange={(e) => setExpertForm((current) => ({ ...current, expertOrganization: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1.5">{t({ uz: "Mutaxassisliklar", en: "Specialties", ru: "Специализации" })}</label>
+                      <Input value={expertForm.expertSpecialties} onChange={(e) => setExpertForm((current) => ({ ...current, expertSpecialties: e.target.value }))} placeholder={t({ uz: "Masalan: Pedagogika, Filologiya", en: "Example: Pedagogy, Philology", ru: "Например: педагогика, филология" })} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1.5">{t({ uz: "Qisqa bio", en: "Short bio", ru: "Краткая биография" })}</label>
+                      <Textarea value={expertForm.expertBio} onChange={(e) => setExpertForm((current) => ({ ...current, expertBio: e.target.value }))} className="min-h-[120px]" />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="checkbox" checked={expertForm.expertIsActive} onChange={(e) => setExpertForm((current) => ({ ...current, expertIsActive: e.target.checked }))} />
+                      {t({ uz: "Portal ekspertlari ro'yxatida faol ko'rsatilsin", en: "Show as active in the portal experts list", ru: "Показывать активным в списке экспертов портала" })}
+                    </label>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="ghost" onClick={() => setEditingExpert(null)}>
+                        {t({ uz: "Bekor qilish", en: "Cancel", ru: "Отмена" })}
+                      </Button>
+                      <Button type="submit">{t({ uz: "Saqlash", en: "Save", ru: "Сохранить" })}</Button>
+                    </div>
+                  </form>
+                </Card>
+              </div>
+            )}
+          </div>
+        )}
+
         {section === "users" && (
           <div className="animate-in fade-in-0 duration-200 space-y-4">
             {/* Role filter chips + Add button */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 {[
-                  { key: "all",      label: `Barchasi (${users?.length ?? 0})` },
-                  { key: "author",   label: `Mualliflar (${users?.filter(u=>u.role==="author").length ?? 0})` },
-                  { key: "reviewer", label: `Taqrizchilar (${users?.filter(u=>u.role==="reviewer").length ?? 0})` },
-                  { key: "editor",   label: `Muharrirlar (${users?.filter(u=>u.role==="editor").length ?? 0})` },
-                  { key: "admin",    label: `Adminlar (${users?.filter(u=>u.role==="admin").length ?? 0})` },
+                  { key: "all",      label: `${t({ uz: "Barchasi", en: "All", ru: "Все" })} (${users?.length ?? 0})` },
+                  { key: "author",   label: `${t({ uz: "Mualliflar", en: "Authors", ru: "Авторы" })} (${users?.filter(u=>u.role==="author").length ?? 0})` },
+                  { key: "experts", label: `${t({ uz: "Ekspertlar", en: "Experts", ru: "Эксперты" })} (${users?.filter(u=>u.role==="reviewer" || u.role==="editor").length ?? 0})` },
+                  { key: "publisher",label: `${t({ uz: "Noshirlar", en: "Publishers", ru: "Издатели" })} (${users?.filter((u: any)=>u.role==="publisher").length ?? 0})` },
+                  { key: "admin",    label: `${t({ uz: "Adminlar", en: "Administrators", ru: "Администраторы" })} (${users?.filter(u=>u.role==="admin").length ?? 0})` },
                 ].map(chip => (
                   <button
                     key={chip.key}
@@ -508,8 +808,8 @@ export default function AdminDashboard() {
                       "px-3 py-1.5 rounded-full text-xs font-semibold border transition-all",
                       chip.key === "all" && "bg-slate-100 text-slate-700 border-slate-200",
                       chip.key === "author" && "bg-blue-50 text-blue-700 border-blue-200",
-                      chip.key === "reviewer" && "bg-amber-50 text-amber-700 border-amber-200",
-                      chip.key === "editor" && "bg-violet-50 text-violet-700 border-violet-200",
+                      chip.key === "experts" && "bg-amber-50 text-amber-700 border-amber-200",
+                      chip.key === "publisher" && "bg-emerald-50 text-emerald-700 border-emerald-200",
                       chip.key === "admin" && "bg-red-50 text-red-700 border-red-200",
                       roleFilter === chip.key ? "ring-2 ring-offset-1 ring-primary/40 shadow-sm" : "opacity-75 hover:opacity-100"
                     )}
@@ -521,10 +821,14 @@ export default function AdminDashboard() {
               <Button
                 size="sm"
                 className="gap-2 shrink-0"
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => {
+                  setForm({ fullName: "", email: "", password: "", role: "author", departmentId: "", scientificDegree: "none", position: "teacher" });
+                  setShowFormPwd(false);
+                  setShowCreateModal(true);
+                }}
               >
                 <UserPlus className="h-4 w-4" />
-                Foydalanuvchi qo'shish
+                {t({ uz: "Foydalanuvchi qo'shish", en: "Add user", ru: "Добавить пользователя" })}
               </Button>
             </div>
 
@@ -532,13 +836,15 @@ export default function AdminDashboard() {
               <div className="px-5 py-4 border-b border-border bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h3 className="font-bold font-serif text-slate-800 flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary" />
-                  Foydalanuvchilar
-                  <span className="text-xs font-normal text-muted-foreground">({filteredUsers.length} ta)</span>
+                  {t({ uz: "Foydalanuvchilar", en: "Users", ru: "Пользователи" })}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({filteredUsers.length} {t({ uz: "ta", en: "items", ru: "зап." })})
+                  </span>
                 </h3>
                 <div className="relative w-full sm:w-[280px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
-                    placeholder="Ism yoki email..."
+                    placeholder={t({ uz: "Ism yoki email...", en: "Name or email...", ru: "Имя или email..." })}
                     className="pl-9 h-9 text-sm"
                     value={userSearch}
                     onChange={e => setUserSearch(e.target.value)}
@@ -556,18 +862,18 @@ export default function AdminDashboard() {
                   <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider border-b border-border/70">
                     <tr>
                       <th className="px-5 py-3 font-semibold">#</th>
-                      <th className="px-5 py-3 font-semibold">F.I.Sh / Email</th>
-                      <th className="px-5 py-3 font-semibold hidden lg:table-cell">Kafedra</th>
-                      <th className="px-5 py-3 font-semibold">Rol</th>
-                      <th className="px-5 py-3 font-semibold hidden md:table-cell">Sana</th>
-                      <th className="px-5 py-3 font-semibold text-right">Amallar</th>
+                      <th className="px-5 py-3 font-semibold">{t({ uz: "F.I.Sh / Email", en: "Full name / Email", ru: "Ф.И.О. / Email" })}</th>
+                      <th className="px-5 py-3 font-semibold hidden lg:table-cell">{t({ uz: "Kafedra", en: "Department", ru: "Кафедра" })}</th>
+                      <th className="px-5 py-3 font-semibold">{t({ uz: "Rol", en: "Role", ru: "Роль" })}</th>
+                      <th className="px-5 py-3 font-semibold hidden md:table-cell">{t({ uz: "Sana", en: "Date", ru: "Дата" })}</th>
+                      <th className="px-5 py-3 font-semibold text-right">{t({ uz: "Amallar", en: "Actions", ru: "Действия" })}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
                     {usersLoading ? (
                       <tr><td colSpan={6} className="p-10 text-center"><LoadingSpinner /></td></tr>
                     ) : filteredUsers.length === 0 ? (
-                      <tr><td colSpan={6} className="p-10 text-center text-slate-400 text-sm">Foydalanuvchilar topilmadi</td></tr>
+                      <tr><td colSpan={6} className="p-10 text-center text-slate-400 text-sm">{t({ uz: "Foydalanuvchilar topilmadi", en: "No users found", ru: "Пользователи не найдены" })}</td></tr>
                     ) : filteredUsers.map((user, idx) => (
                       <tr key={user.id} className={cn("transition-colors hover:bg-blue-50/30", idx % 2 === 0 ? "bg-white" : "bg-slate-50/20")}>
                         <td className="px-5 py-3.5 text-slate-400 font-mono text-xs">{idx + 1}</td>
@@ -588,32 +894,32 @@ export default function AdminDashboard() {
                         <td className="px-5 py-3.5">
                           <Select
                             className="h-8 text-xs bg-white border-border w-32"
-                            value={user.role}
+                            value={user.role === "reviewer" || user.role === "editor" ? "expert" : user.role}
                             onChange={e => handleRoleChange(user.id, e.target.value)}
                             disabled={updateRoleMutation.isPending}
                           >
-                            <option value="author">Muallif</option>
-                            <option value="reviewer">Taqrizchi</option>
-                            <option value="editor">Muharrir</option>
-                            <option value="admin">Admin</option>
+                            <option value="author">{getLocalizedRoleLabel("author", locale)}</option>
+                            <option value="expert">{getLocalizedRoleLabel("reviewer", locale)}</option>
+                            <option value="publisher">{getLocalizedRoleLabel("publisher", locale)}</option>
+                            <option value="admin">{getLocalizedRoleLabel("admin", locale)}</option>
                           </Select>
                         </td>
                         <td className="px-5 py-3.5 text-slate-400 text-xs hidden md:table-cell">
-                          {formatDate(user.createdAt)}
+                          {formatDate(user.createdAt, locale)}
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => { setResetTarget({ id: user.id, name: user.fullName }); setNewPassword(""); }}
                               className="h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
-                              title="Parolni tiklash"
+                              title={t({ uz: "Parolni tiklash", en: "Reset password", ru: "Сбросить пароль" })}
                             >
                               <Lock className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteUser(user.id, user.fullName)}
                               className="h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                              title="O'chirish"
+                              title={t({ uz: "O'chirish", en: "Delete", ru: "Удалить" })}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -633,7 +939,7 @@ export default function AdminDashboard() {
                   <div className="px-6 py-5 border-b border-border flex items-center justify-between">
                     <h3 className="font-bold font-serif text-lg text-slate-900 flex items-center gap-2">
                       <UserPlus className="h-5 w-5 text-primary" />
-                      Yangi foydalanuvchi yaratish
+                      {t({ uz: "Yangi foydalanuvchi yaratish", en: "Create new user", ru: "Создать пользователя" })}
                     </h3>
                     <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
                       <X className="h-5 w-5" />
@@ -642,9 +948,11 @@ export default function AdminDashboard() {
                   <form onSubmit={handleCreateUser} className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="col-span-2">
-                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">To'liq ismi *</label>
+                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                          {t({ uz: "To'liq ismi", en: "Full name", ru: "ФИО" })} *
+                        </label>
                         <Input
-                          placeholder="Karimov Jasur Aliyevich"
+                          placeholder={t({ uz: "Karimov Jasur Aliyevich", en: "John Smith", ru: "Иванов Иван Иванович" })}
                           value={form.fullName}
                           onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))}
                           required
@@ -661,11 +969,13 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">Parol *</label>
+                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                          {t({ uz: "Parol", en: "Password", ru: "Пароль" })} *
+                        </label>
                         <div className="relative">
                           <Input
                             type={showFormPwd ? "text" : "password"}
-                            placeholder="Kamida 6 belgi"
+                            placeholder={t({ uz: "Kamida 6 belgi", en: "At least 6 characters", ru: "Минимум 6 символов" })}
                             value={form.password}
                             onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                             className="pr-10"
@@ -679,43 +989,45 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div>
-                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">Roli</label>
+                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">{t({ uz: "Roli", en: "Role", ru: "Роль" })}</label>
                         <Select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className="h-9 text-sm">
-                          <option value="author">Muallif</option>
-                          <option value="reviewer">Taqrizchi</option>
-                          <option value="editor">Muharrir</option>
-                          <option value="admin">Admin</option>
+                          <option value="author">{getLocalizedRoleLabel("author", locale)}</option>
+                          <option value="expert">{getLocalizedRoleLabel("reviewer", locale)}</option>
+                          <option value="publisher">{getLocalizedRoleLabel("publisher", locale)}</option>
+                          <option value="admin">{getLocalizedRoleLabel("admin", locale)}</option>
                         </Select>
                       </div>
                       <div>
-                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">Kafedra</label>
+                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">{t({ uz: "Kafedra", en: "Department", ru: "Кафедра" })}</label>
                         <Select value={form.departmentId} onChange={e => setForm(f => ({ ...f, departmentId: e.target.value }))} className="h-9 text-sm">
-                          <option value="">— Tanlang —</option>
+                          <option value="">{t({ uz: "Tanlang", en: "Select", ru: "Выберите" })}</option>
                           {(departments ?? []).map(d => (
                             <option key={d.id} value={d.id}>{d.name}</option>
                           ))}
                         </Select>
                       </div>
                       <div>
-                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">Ilmiy daraja</label>
+                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">{t({ uz: "Ilmiy daraja", en: "Scientific degree", ru: "Ученая степень" })}</label>
                         <Select value={form.scientificDegree} onChange={e => setForm(f => ({ ...f, scientificDegree: e.target.value }))} className="h-9 text-sm">
-                          {DEGREE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          {DEGREE_OPTIONS.map(o => <option key={o.value} value={o.value}>{getDegreeLabel(o.value)}</option>)}
                         </Select>
                       </div>
                       <div>
-                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">Lavozim</label>
+                        <label className="text-xs font-semibold text-slate-600 block mb-1.5">{t({ uz: "Lavozim", en: "Position", ru: "Должность" })}</label>
                         <Select value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))} className="h-9 text-sm">
-                          {POSITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          {POSITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{getPositionLabel(o.value)}</option>)}
                         </Select>
                       </div>
                     </div>
 
                     <div className="flex gap-3 pt-2">
                       <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
-                        Bekor qilish
+                        {t({ uz: "Bekor qilish", en: "Cancel", ru: "Отмена" })}
                       </Button>
                       <Button type="submit" className="flex-1" disabled={createUserMutation.isPending}>
-                        {createUserMutation.isPending ? "Yaratilmoqda..." : "Yaratish"}
+                        {createUserMutation.isPending
+                          ? t({ uz: "Yaratilmoqda...", en: "Creating...", ru: "Создание..." })
+                          : t({ uz: "Yaratish", en: "Create", ru: "Создать" })}
                       </Button>
                     </div>
                   </form>
@@ -730,7 +1042,7 @@ export default function AdminDashboard() {
                   <div className="px-6 py-5 border-b border-border flex items-center justify-between">
                     <h3 className="font-bold font-serif text-slate-900 flex items-center gap-2">
                       <Lock className="h-4 w-4 text-amber-600" />
-                      Parolni tiklash
+                      {t({ uz: "Parolni tiklash", en: "Reset password", ru: "Сброс пароля" })}
                     </h3>
                     <button onClick={() => setResetTarget(null)} className="text-slate-400 hover:text-slate-600">
                       <X className="h-4 w-4" />
@@ -738,12 +1050,13 @@ export default function AdminDashboard() {
                   </div>
                   <form onSubmit={handleResetPassword} className="p-6 space-y-4">
                     <p className="text-sm text-slate-600">
-                      <span className="font-semibold text-slate-900">{resetTarget.name}</span> uchun yangi parol belgilang:
+                      {t({ uz: "Yangi parol belgilang", en: "Set a new password for", ru: "Установите новый пароль для" })}{" "}
+                      <span className="font-semibold text-slate-900">{resetTarget.name}</span>
                     </p>
                     <div className="relative">
                       <Input
                         type={showNewPwd ? "text" : "password"}
-                        placeholder="Yangi parol (kamida 6 belgi)"
+                        placeholder={t({ uz: "Yangi parol (kamida 6 belgi)", en: "New password (at least 6 characters)", ru: "Новый пароль (минимум 6 символов)" })}
                         value={newPassword}
                         onChange={e => setNewPassword(e.target.value)}
                         className="pr-10"
@@ -758,12 +1071,18 @@ export default function AdminDashboard() {
                     </div>
                     <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
                       <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-700">Foydalanuvchiga yangi parolni shaxsan xabardor qiling.</p>
+                      <p className="text-xs text-amber-700">
+                        {t({ uz: "Foydalanuvchiga yangi parolni shaxsan xabardor qiling.", en: "Notify the user of the new password directly.", ru: "Сообщите пользователю новый пароль лично." })}
+                      </p>
                     </div>
                     <div className="flex gap-3">
-                      <Button type="button" variant="outline" className="flex-1" onClick={() => setResetTarget(null)}>Bekor</Button>
+                      <Button type="button" variant="outline" className="flex-1" onClick={() => setResetTarget(null)}>
+                        {t({ uz: "Bekor", en: "Cancel", ru: "Отмена" })}
+                      </Button>
                       <Button type="submit" className="flex-1 bg-amber-600 hover:bg-amber-700" disabled={resetPasswordMutation.isPending}>
-                        {resetPasswordMutation.isPending ? "Saqlanmoqda..." : "Parolni o'rnatish"}
+                        {resetPasswordMutation.isPending
+                          ? t({ uz: "Saqlanmoqda...", en: "Saving...", ru: "Сохранение..." })
+                          : t({ uz: "Parolni o'rnatish", en: "Set password", ru: "Установить пароль" })}
                       </Button>
                     </div>
                   </form>
@@ -777,10 +1096,12 @@ export default function AdminDashboard() {
         {section === "dictionaries" && (
           <div className="animate-in fade-in-0 duration-200 grid md:grid-cols-2 gap-5">
             <DictPanel
-              title="Kafedralar" icon={Globe} count={departmentsFull?.length ?? 0}
+              title={t({ uz: "Kafedralar", en: "Departments", ru: "Кафедры" })} icon={Globe} count={departmentsFull?.length ?? 0}
               inputValue={newDeptName} onInputChange={setNewDeptName}
               onAdd={handleCreateDept} adding={createDeptMutation.isPending}
-              placeholder="Yangi kafedra nomi..."
+              placeholder={t({ uz: "Yangi kafedra nomi...", en: "New department name...", ru: "Название новой кафедры..." })}
+              addLabel={t({ uz: "Qo'shish", en: "Add", ru: "Добавить" })}
+              emptyLabel={t({ uz: "Ro'yxat bo'sh", en: "The list is empty", ru: "Список пуст" })}
             >
               {(departmentsFull ?? []).map(d => (
                 <DictRow key={d.id} name={d.name} onDelete={() => handleDeleteDept(d.id, d.name)} />
@@ -788,10 +1109,12 @@ export default function AdminDashboard() {
             </DictPanel>
 
             <DictPanel
-              title="Ilmiy yo'nalishlar" icon={BookOpen} count={directions?.length ?? 0}
+              title={t({ uz: "Ilmiy yo'nalishlar", en: "Scientific directions", ru: "Научные направления" })} icon={BookOpen} count={directions?.length ?? 0}
               inputValue={newDirName} onInputChange={setNewDirName}
               onAdd={handleCreateDir} adding={createDirMutation.isPending}
-              placeholder="Yangi yo'nalish nomi..."
+              placeholder={t({ uz: "Yangi yo'nalish nomi...", en: "New direction name...", ru: "Название нового направления..." })}
+              addLabel={t({ uz: "Qo'shish", en: "Add", ru: "Добавить" })}
+              emptyLabel={t({ uz: "Ro'yxat bo'sh", en: "The list is empty", ru: "Список пуст" })}
             >
               {(directions ?? []).map(d => (
                 <DictRow key={d.id} name={d.name} onDelete={() => handleDeleteDir(d.id, d.name)} />
@@ -806,8 +1129,16 @@ export default function AdminDashboard() {
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
               <Mail className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-amber-800">SMTP integratsiyasi</p>
-                <p className="text-xs text-amber-600 mt-0.5">Shablonlarni tahrirlash va yoqish/o'chirish mumkin. SMTP orqali real yuborish keyingi versiyada.</p>
+                <p className="text-sm font-semibold text-amber-800">
+                  {t({ uz: "SMTP integratsiyasi", en: "SMTP integration", ru: "SMTP-интеграция" })}
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  {t({
+                    uz: "Shablonlarni tahrirlash va yoqish/o'chirish mumkin. SMTP orqali real yuborish keyingi versiyada.",
+                    en: "Templates can be edited and enabled or disabled. Real SMTP delivery is planned for the next version.",
+                    ru: "Шаблоны можно редактировать, включать и отключать. Реальная отправка через SMTP запланирована в следующей версии.",
+                  })}
+                </p>
               </div>
             </div>
 
@@ -822,19 +1153,21 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                           <h4 className="font-bold text-slate-900 flex items-center gap-2">
                             <Edit3 className="h-4 w-4 text-primary" />
-                            {tpl.name} — tahrirlash
+                            {tpl.name} - {t({ uz: "tahrirlash", en: "edit", ru: "редактирование" })}
                           </h4>
                           <button onClick={() => setEditingTemplate(null)} className="text-slate-400 hover:text-slate-600">
                             <X className="h-4 w-4" />
                           </button>
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 block mb-1">Mavzu (Subject)</label>
+                          <label className="text-xs font-semibold text-slate-600 block mb-1">
+                            {t({ uz: "Mavzu", en: "Subject", ru: "Тема" })} (Subject)
+                          </label>
                           <Input value={templateEdits?.subject ?? ""} onChange={e => setTemplateEdits(t => t ? { ...t, subject: e.target.value } : t)} className="h-9 text-sm" />
                         </div>
                         <div>
                           <label className="text-xs font-semibold text-slate-600 block mb-1">
-                            Xabar matni — o'zgaruvchilar: #{"{"}fullName{"}"}, #{"{"}title{"}"}, #{"{"}id{"}"}, #{"{"}date{"}"}
+                            {t({ uz: "Xabar matni", en: "Message body", ru: "Текст сообщения" })} - {t({ uz: "o'zgaruvchilar", en: "variables", ru: "переменные" })}: #{"{"}fullName{"}"}, #{"{"}title{"}"}, #{"{"}id{"}"}, #{"{"}date{"}"}
                           </label>
                           <textarea
                             value={templateEdits?.body ?? ""}
@@ -844,9 +1177,11 @@ export default function AdminDashboard() {
                           />
                         </div>
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)}>Bekor qilish</Button>
+                          <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)}>
+                            {t({ uz: "Bekor qilish", en: "Cancel", ru: "Отмена" })}
+                          </Button>
                           <Button size="sm" onClick={() => saveTemplate(tpl.id)} disabled={updateTemplateMutation.isPending}>
-                            <Save className="h-3.5 w-3.5 mr-1.5" />Saqlash
+                            <Save className="h-3.5 w-3.5 mr-1.5" />{t({ uz: "Saqlash", en: "Save", ru: "Сохранить" })}
                           </Button>
                         </div>
                       </div>
@@ -860,26 +1195,28 @@ export default function AdminDashboard() {
                               <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full border",
                                 tpl.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"
                               )}>
-                                {tpl.isActive ? "Faol" : "O'chiq"}
+                                {tpl.isActive
+                                  ? t({ uz: "Faol", en: "Active", ru: "Активен" })
+                                  : t({ uz: "O'chiq", en: "Disabled", ru: "Отключен" })}
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 mb-1">
-                              <span className="font-semibold">Kalit:</span>{" "}
+                              <span className="font-semibold">{t({ uz: "Kalit", en: "Key", ru: "Ключ" })}:</span>{" "}
                               <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">{tpl.key}</code>
                             </p>
-                            <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">Mavzu:</span> {tpl.subject}</p>
+                            <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">{t({ uz: "Mavzu", en: "Subject", ru: "Тема" })}:</span> {tpl.subject}</p>
                             <p className="text-xs text-slate-400 line-clamp-2 mt-1">{tpl.body}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5"
                               onClick={() => toggleTemplate(tpl.id, tpl.isActive)} disabled={updateTemplateMutation.isPending}>
                               {tpl.isActive
-                                ? <><ToggleRight className="h-3.5 w-3.5 text-emerald-600" />O'chirish</>
-                                : <><ToggleLeft className="h-3.5 w-3.5" />Yoqish</>}
+                                ? <><ToggleRight className="h-3.5 w-3.5 text-emerald-600" />{t({ uz: "O'chirish", en: "Disable", ru: "Отключить" })}</>
+                                : <><ToggleLeft className="h-3.5 w-3.5" />{t({ uz: "Yoqish", en: "Enable", ru: "Включить" })}</>}
                             </Button>
                             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
                               onClick={() => startEditTemplate(tpl)}>
-                              <Edit3 className="h-3.5 w-3.5" />Tahrirlash
+                              <Edit3 className="h-3.5 w-3.5" />{t({ uz: "Tahrirlash", en: "Edit", ru: "Редактировать" })}
                             </Button>
                           </div>
                         </div>
@@ -898,17 +1235,21 @@ export default function AdminDashboard() {
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
               <FileSpreadsheet className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-blue-800">Excel hisobotlar</p>
+                <p className="text-sm font-semibold text-blue-800">{t({ uz: "Excel hisobotlar", en: "Excel reports", ru: "Excel-отчеты" })}</p>
                 <p className="text-xs text-blue-600 mt-0.5">
-                  Barcha ma'lumotlar .xlsx formatida yuklab olinadi. Microsoft Excel, Google Sheets yoki LibreOffice Calc bilan ochiladi.
+                  {t({
+                    uz: "Barcha ma'lumotlar .xlsx formatida yuklab olinadi. Microsoft Excel, Google Sheets yoki LibreOffice Calc bilan ochiladi.",
+                    en: "All data is downloaded in .xlsx format and can be opened in Microsoft Excel, Google Sheets, or LibreOffice Calc.",
+                    ru: "Все данные выгружаются в формате .xlsx и открываются в Microsoft Excel, Google Sheets или LibreOffice Calc.",
+                  })}
                 </p>
               </div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
               <ExportCard
-                title="Foydalanuvchilar ro'yxati"
-                description="Barcha foydalanuvchilar: ismi, email, roli, kafedrasi, ilmiy darajasi, ro'yxatdan o'tgan sanasi"
+                title={t({ uz: "Foydalanuvchilar ro'yxati", en: "Users list", ru: "Список пользователей" })}
+                description={t({ uz: "Barcha foydalanuvchilar: ismi, email, roli, kafedrasi, ilmiy darajasi, ro'yxatdan o'tgan sanasi", en: "All users: name, email, role, department, scientific degree, registration date", ru: "Все пользователи: имя, email, роль, кафедра, ученая степень, дата регистрации" })}
                 icon={Users}
                 accent="blue"
                 filename="foydalanuvchilar.xlsx"
@@ -919,11 +1260,13 @@ export default function AdminDashboard() {
                   toast
                 )}
                 isLoading={downloading === "users"}
+                downloadLabel={t({ uz: "Yuklab olish", en: "Download", ru: "Скачать" })}
+                loadingLabel={t({ uz: "Yuklanmoqda...", en: "Downloading...", ru: "Загрузка..." })}
               />
 
               <ExportCard
-                title="Arizalar ro'yxati"
-                description="Barcha arizalar: sarlavha, muallif, tur, holat, muharrir izohi, yuborilgan sana"
+                title={t({ uz: "Arizalar ro'yxati", en: "Submissions list", ru: "Список заявок" })}
+                description={t({ uz: "Barcha arizalar: sarlavha, muallif, tur, holat, ekspert izohi, yuborilgan sana", en: "All submissions: title, author, type, status, expert note, submission date", ru: "Все заявки: название, автор, тип, статус, комментарий эксперта, дата отправки" })}
                 icon={FileText}
                 accent="violet"
                 filename="arizalar.xlsx"
@@ -934,11 +1277,13 @@ export default function AdminDashboard() {
                   toast
                 )}
                 isLoading={downloading === "submissions"}
+                downloadLabel={t({ uz: "Yuklab olish", en: "Download", ru: "Скачать" })}
+                loadingLabel={t({ uz: "Yuklanmoqda...", en: "Downloading...", ru: "Загрузка..." })}
               />
 
               <ExportCard
-                title="Taqrizlar ro'yxati"
-                description="Barcha taqrizlar: taqrizchi, baho, ilmiy qiymat, originalligi, xulosa, yakunlangan sana"
+                title={t({ uz: "Ekspert xulosalari ro'yxati", en: "Expert conclusions list", ru: "Список экспертных заключений" })}
+                description={t({ uz: "Barcha ekspert xulosalari: ekspert, baho, ilmiy qiymat, originalligi, xulosa, yakunlangan sana", en: "All expert conclusions: expert, scores, scientific value, originality, conclusion, completion date", ru: "Все экспертные заключения: эксперт, оценки, научная ценность, оригинальность, заключение, дата завершения" })}
                 icon={CheckCircle}
                 accent="emerald"
                 filename="taqrizlar.xlsx"
@@ -949,11 +1294,13 @@ export default function AdminDashboard() {
                   toast
                 )}
                 isLoading={downloading === "reviews"}
+                downloadLabel={t({ uz: "Yuklab olish", en: "Download", ru: "Скачать" })}
+                loadingLabel={t({ uz: "Yuklanmoqda...", en: "Downloading...", ru: "Загрузка..." })}
               />
 
               <ExportCard
-                title="Statistika xulosasi"
-                description="Arizalar va foydalanuvchilar bo'yicha umumiy statistika — 2 ta varaqda"
+                title={t({ uz: "Statistika xulosasi", en: "Statistics summary", ru: "Сводная статистика" })}
+                description={t({ uz: "Arizalar va foydalanuvchilar bo'yicha umumiy statistika - 2 ta varaqda", en: "Overall submission and user statistics in 2 sheets", ru: "Общая статистика по заявкам и пользователям на 2 листах" })}
                 icon={TrendingUp}
                 accent="amber"
                 filename="statistika.xlsx"
@@ -964,6 +1311,8 @@ export default function AdminDashboard() {
                   toast
                 )}
                 isLoading={downloading === "stats"}
+                downloadLabel={t({ uz: "Yuklab olish", en: "Download", ru: "Скачать" })}
+                loadingLabel={t({ uz: "Yuklanmoqda...", en: "Downloading...", ru: "Загрузка..." })}
               />
             </div>
 
@@ -971,13 +1320,13 @@ export default function AdminDashboard() {
             <Card className="p-5 bg-slate-50/70">
               <h4 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                 <FileSpreadsheet className="h-4 w-4 text-primary" />
-                Yuklab olish tartibi
+                {t({ uz: "Yuklab olish tartibi", en: "Download instructions", ru: "Порядок скачивания" })}
               </h4>
               <ol className="space-y-1.5 text-xs text-slate-600">
-                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">1</span>Kerakli hisobot kartochkasidagi "Yuklab olish" tugmasini bosing.</li>
-                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">2</span>Fayl avtomatik ravishda brauzeringizga yuklanadi.</li>
-                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">3</span>Faylni Microsoft Excel, Google Sheets yoki LibreOffice Calc dasturida oching.</li>
-                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">4</span>Ma'lumotlar Uzbek tilida, har bir ustun sarlavhasi bilan taqdim etiladi.</li>
+                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">1</span>{t({ uz: "Kerakli hisobot kartochkasidagi Yuklab olish tugmasini bosing.", en: "Click Download on the required report card.", ru: "Нажмите Скачать на нужной карточке отчета." })}</li>
+                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">2</span>{t({ uz: "Fayl avtomatik ravishda brauzeringizga yuklanadi.", en: "The file will be downloaded by your browser automatically.", ru: "Файл автоматически загрузится в браузере." })}</li>
+                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">3</span>{t({ uz: "Faylni Microsoft Excel, Google Sheets yoki LibreOffice Calc dasturida oching.", en: "Open the file in Microsoft Excel, Google Sheets, or LibreOffice Calc.", ru: "Откройте файл в Microsoft Excel, Google Sheets или LibreOffice Calc." })}</li>
+                <li className="flex items-start gap-2"><span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">4</span>{t({ uz: "Ma'lumotlar tanlangan portal tiliga mos sarlavhalar bilan taqdim etiladi.", en: "Data is presented with headers aligned to the selected portal language.", ru: "Данные отображаются с заголовками, соответствующими выбранному языку портала." })}</li>
               </ol>
             </Card>
           </div>
@@ -990,14 +1339,16 @@ export default function AdminDashboard() {
               <div className="px-5 py-4 border-b border-border bg-white flex items-center justify-between">
                 <h3 className="font-bold font-serif text-slate-800 flex items-center gap-2">
                   <Activity className="h-4 w-4 text-primary" />
-                  Harakatlar tarixi
+                  {t({ uz: "Harakatlar tarixi", en: "Activity history", ru: "История действий" })}
                   {auditData?.total != null && (
-                    <span className="text-xs font-normal text-muted-foreground">({auditData.total} ta yozuv)</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      ({auditData.total} {t({ uz: "ta yozuv", en: "records", ru: "записей" })})
+                    </span>
                   )}
                 </h3>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => refetchAudit()}>
                   <RefreshCw className="h-3.5 w-3.5" />
-                  Yangilash
+                  {t({ uz: "Yangilash", en: "Refresh", ru: "Обновить" })}
                 </Button>
               </div>
 
@@ -1006,18 +1357,20 @@ export default function AdminDashboard() {
               ) : !auditData?.items?.length ? (
                 <div className="flex flex-col items-center justify-center py-16 text-slate-300">
                   <Activity className="h-14 w-14 mb-3" />
-                  <p className="text-sm text-slate-400">Hali hech qanday harakatlar qayd etilmagan</p>
+                  <p className="text-sm text-slate-400">
+                    {t({ uz: "Hali hech qanday harakatlar qayd etilmagan", en: "No actions have been recorded yet", ru: "Действия пока не зафиксированы" })}
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider border-b border-border/70">
                       <tr>
-                        <th className="px-5 py-3 font-semibold">Harakat</th>
-                        <th className="px-5 py-3 font-semibold hidden md:table-cell">Tafsilot</th>
-                        <th className="px-5 py-3 font-semibold">Foydalanuvchi</th>
+                        <th className="px-5 py-3 font-semibold">{t({ uz: "Harakat", en: "Action", ru: "Действие" })}</th>
+                        <th className="px-5 py-3 font-semibold hidden md:table-cell">{t({ uz: "Tafsilot", en: "Details", ru: "Детали" })}</th>
+                        <th className="px-5 py-3 font-semibold">{t({ uz: "Foydalanuvchi", en: "User", ru: "Пользователь" })}</th>
                         <th className="px-5 py-3 font-semibold hidden lg:table-cell">IP</th>
-                        <th className="px-5 py-3 font-semibold text-right">Sana</th>
+                        <th className="px-5 py-3 font-semibold text-right">{t({ uz: "Sana", en: "Date", ru: "Дата" })}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
@@ -1031,20 +1384,20 @@ export default function AdminDashboard() {
                                 <div className={cn("h-7 w-7 rounded-full flex items-center justify-center shrink-0", meta.color)}>
                                   <Icon className="h-3.5 w-3.5" />
                                 </div>
-                                <span className="font-medium text-slate-800 text-sm whitespace-nowrap">{meta.label}</span>
+                                <span className="font-medium text-slate-800 text-sm whitespace-nowrap">{getActionLabel(log.action)}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-3.5 text-slate-500 text-xs max-w-[220px] truncate hidden md:table-cell">{log.detail || "—"}</td>
+                            <td className="px-5 py-3.5 text-slate-500 text-xs max-w-[220px] truncate hidden md:table-cell">{formatAuditDetail(log.detail) || "—"}</td>
                             <td className="px-5 py-3.5">
                               <div>
-                                <p className="text-xs font-medium text-slate-700">{log.userEmail || "Tizim"}</p>
+                                <p className="text-xs font-medium text-slate-700">{log.userEmail || t({ uz: "Tizim", en: "System", ru: "Система" })}</p>
                                 {log.userRole && (
-                                  <p className="text-[11px] text-slate-400 mt-0.5">{ROLE_MAP[log.userRole]?.label ?? log.userRole}</p>
+                                  <p className="text-[11px] text-slate-400 mt-0.5">{getLocalizedRoleLabel(log.userRole, locale)}</p>
                                 )}
                               </div>
                             </td>
                             <td className="px-5 py-3.5 text-slate-400 text-xs font-mono hidden lg:table-cell">{log.ipAddress || "—"}</td>
-                            <td className="px-5 py-3.5 text-right text-xs text-slate-400 whitespace-nowrap">{formatDate(log.createdAt)}</td>
+                            <td className="px-5 py-3.5 text-right text-xs text-slate-400 whitespace-nowrap">{formatDate(log.createdAt, locale)}</td>
                           </tr>
                         );
                       })}
@@ -1080,11 +1433,11 @@ function KpiCard({ label, value, icon: Icon, accent }: { label: string; value: n
   );
 }
 
-function DictPanel({ title, icon: Icon, count, inputValue, onInputChange, onAdd, adding, placeholder, children }: {
+function DictPanel({ title, icon: Icon, count, inputValue, onInputChange, onAdd, adding, placeholder, addLabel, emptyLabel, children }: {
   title: string; icon: any; count: number;
   inputValue: string; onInputChange: (v: string) => void;
   onAdd: (e: React.FormEvent) => void; adding: boolean;
-  placeholder: string; children: React.ReactNode;
+  placeholder: string; addLabel: string; emptyLabel: string; children: React.ReactNode;
 }) {
   return (
     <Card className="overflow-hidden shadow-sm bg-white">
@@ -1099,12 +1452,12 @@ function DictPanel({ title, icon: Icon, count, inputValue, onInputChange, onAdd,
         <form onSubmit={onAdd} className="flex gap-2 mb-4">
           <Input placeholder={placeholder} value={inputValue} onChange={e => onInputChange(e.target.value)} className="flex-1 h-9 text-sm" />
           <Button type="submit" size="sm" disabled={!inputValue.trim() || adding} className="shrink-0 gap-1">
-            <Plus className="h-3.5 w-3.5" />Qo'shish
+            <Plus className="h-3.5 w-3.5" />{addLabel}
           </Button>
         </form>
         <div className="max-h-[400px] overflow-y-auto border border-border/50 rounded-xl divide-y divide-border/30">
           {React.Children.count(children) === 0
-            ? <p className="p-6 text-center text-sm text-slate-400">Ro'yxat bo'sh</p>
+            ? <p className="p-6 text-center text-sm text-slate-400">{emptyLabel}</p>
             : children}
         </div>
       </div>
@@ -1126,9 +1479,9 @@ function DictRow({ name, onDelete }: { name: string; onDelete: () => void }) {
   );
 }
 
-function ExportCard({ title, description, icon: Icon, accent, filename, onDownload, isLoading }: {
+function ExportCard({ title, description, icon: Icon, accent, filename, onDownload, isLoading, downloadLabel, loadingLabel }: {
   title: string; description: string; icon: any; accent: string;
-  filename: string; onDownload: () => void; isLoading: boolean;
+  filename: string; onDownload: () => void; isLoading: boolean; downloadLabel: string; loadingLabel: string;
 }) {
   const accentMap: Record<string, { bg: string; icon: string; border: string; btn: string }> = {
     blue:    { bg: "bg-blue-50",    icon: "text-blue-600 bg-blue-100",    border: "border-blue-100",    btn: "bg-blue-600 hover:bg-blue-700 text-white" },
@@ -1160,9 +1513,9 @@ function ExportCard({ title, description, icon: Icon, accent, filename, onDownlo
         )}
       >
         {isLoading ? (
-          <><RefreshCw className="h-4 w-4 animate-spin" />Yuklanmoqda...</>
+          <><RefreshCw className="h-4 w-4 animate-spin" />{loadingLabel}</>
         ) : (
-          <><Download className="h-4 w-4" />Yuklab olish</>
+          <><Download className="h-4 w-4" />{downloadLabel}</>
         )}
       </button>
     </Card>

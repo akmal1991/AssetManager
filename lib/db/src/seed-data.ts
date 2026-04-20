@@ -60,7 +60,7 @@ export const seedEmailTemplates = [
     key: "review_assigned",
     name: "Taqriz biriktirildi",
     subject: "Sizga yangi taqriz topshirildi",
-    body: "Hurmatli taqrizchi, sizga yangi qo'lyozma ekspertiza uchun biriktirildi.",
+    body: "Hurmatli ekspert, sizga yangi qo'lyozma ekspertiza uchun biriktirildi.",
   },
   {
     key: "revision_required",

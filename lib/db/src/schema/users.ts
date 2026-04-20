@@ -1,8 +1,8 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const roleValues = ["author", "editor", "reviewer", "admin"] as const;
+export const roleValues = ["author", "editor", "reviewer", "publisher", "admin"] as const;
 export const degreeValues = ["PhD", "DSc", "none"] as const;
 export const positionValues = [
   "teacher",
@@ -27,6 +27,10 @@ export const usersTable = pgTable("users", {
   departmentId: integer("department_id").references(() => departmentsTable.id),
   scientificDegree: text("scientific_degree").$type<typeof degreeValues[number]>().notNull().default("none"),
   position: text("position").$type<typeof positionValues[number]>().notNull().default("teacher"),
+  expertOrganization: text("expert_organization"),
+  expertBio: text("expert_bio"),
+  expertSpecialties: jsonb("expert_specialties").$type<string[]>().notNull().default([]),
+  expertIsActive: boolean("expert_is_active").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

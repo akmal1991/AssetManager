@@ -50,8 +50,9 @@ export const REVIEW_VERDICT_LABELS = {
 
 export const ROLE_LABELS_BY_LOCALE = {
   author: { uz: "Muallif", en: "Author", ru: "Автор" },
-  editor: { uz: "Muharrir", en: "Editor", ru: "Редактор" },
-  reviewer: { uz: "Taqrizchi", en: "Reviewer", ru: "Рецензент" },
+  editor: { uz: "Ekspert", en: "Expert", ru: "Эксперт" },
+  reviewer: { uz: "Ekspert", en: "Expert", ru: "Эксперт" },
+  publisher: { uz: "Noshir", en: "Publisher", ru: "Издатель" },
   admin: { uz: "Administrator", en: "Administrator", ru: "Администратор" },
 } as const;
 
