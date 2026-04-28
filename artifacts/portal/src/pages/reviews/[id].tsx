@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Save, Send, FileText, User, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, Save, Send, FileText, User, ClipboardCheck, Paperclip, Mail, Phone, Building2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button, Card, Textarea, PageTransition, LoadingSpinner, Input, Badge } from "@/components/ui/shared";
 import { useGetReview, useSubmitReview } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getLocalizedLiteratureType, getLocalizedReviewVerdict } from "@/lib/utils";
+import { downloadProtectedDocument } from "@/lib/documents";
 import { useLocale, type Locale } from "@/lib/i18n";
 
 type FormState = {
@@ -168,6 +169,18 @@ function getClassificationCopy(classification: string | null | undefined, locale
   return labels[classification as keyof typeof labels]?.[locale] ?? classification;
 }
 
+function getDocumentTypeLabel(docType: string, locale: Locale) {
+  const labels = {
+    main_document: { uz: "Asosiy fayl", en: "Main document", ru: "Основной документ" },
+    curriculum: { uz: "O'quv reja", en: "Curriculum", ru: "Учебный план" },
+    syllabus: { uz: "Sillabus", en: "Syllabus", ru: "Силлабус" },
+    plagiarism_report: { uz: "Plagiat hisoboti", en: "Plagiarism report", ru: "Отчет о плагиате" },
+    internal_review: { uz: "Ichki taqriz", en: "Internal review", ru: "Внутренняя рецензия" },
+    external_review: { uz: "Tashqi taqriz", en: "External review", ru: "Внешняя рецензия" },
+  } as const;
+  return labels[docType as keyof typeof labels]?.[locale] ?? docType;
+}
+
 function RadioGroup({
   name,
   value,
@@ -294,6 +307,18 @@ export default function ReviewForm() {
     }
   };
 
+  const handleDocumentDownload = async (document: any) => {
+    try {
+      await downloadProtectedDocument(document);
+    } catch (error: any) {
+      toast({
+        title: t({ uz: "Hujjat ochilmadi", en: "Document could not be opened", ru: "Не удалось открыть документ" }),
+        description: error?.message || t({ uz: "Hujjatni yuklab bo'lmadi.", en: "The document could not be downloaded.", ru: "Не удалось скачать документ." }),
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.finalRecommendation || !form.purposeRelevance || !form.finalNote || !validateScores()) {
@@ -356,6 +381,9 @@ export default function ReviewForm() {
   const isReadOnly = reviewData.status === "submitted" || !isExpertOwner;
   const currentRole = user?.role as string | undefined;
   const backPath = currentRole === "author" ? "/dashboard/author" : currentRole === "publisher" ? "/dashboard/publisher" : "/dashboard/expert";
+  const submission = reviewData.submission;
+  const author = submission?.author;
+  const documents = submission?.documents ?? [];
 
   return (
     <DashboardLayout>
@@ -381,6 +409,82 @@ export default function ReviewForm() {
                 </Badge>
               </div>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-6 mb-6">
+            <Card className="p-6 border border-border shadow-sm bg-white">
+              <div className="flex items-center gap-2 mb-4">
+                <User className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-bold font-serif text-slate-900">
+                  {t({ uz: "Muallif ma'lumotlari", en: "Author details", ru: "Информация об авторе" })}
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700">
+                <div>
+                  <p className="text-slate-500 mb-1">{t({ uz: "Muallif", en: "Author", ru: "Автор" })}</p>
+                  <p className="font-semibold text-slate-900">{author?.fullName || submission?.authorName || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 mb-1">{t({ uz: "Yo'nalish", en: "Scientific direction", ru: "Научное направление" })}</p>
+                  <p className="font-semibold text-slate-900">{submission?.scientificDirection || "—"}</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Mail className="h-4 w-4 text-slate-400 mt-0.5" />
+                  <div>
+                    <p className="text-slate-500 mb-1">{t({ uz: "Email", en: "Email", ru: "Email" })}</p>
+                    <p>{author?.email || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Phone className="h-4 w-4 text-slate-400 mt-0.5" />
+                  <div>
+                    <p className="text-slate-500 mb-1">{t({ uz: "Telefon", en: "Phone", ru: "Телефон" })}</p>
+                    <p>{author?.phone || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 md:col-span-2">
+                  <Building2 className="h-4 w-4 text-slate-400 mt-0.5" />
+                  <div>
+                    <p className="text-slate-500 mb-1">{t({ uz: "Kafedra/Fakultet", en: "Department/Faculty", ru: "Кафедра/факультет" })}</p>
+                    <p>{submission?.departmentName || form.departmentFaculty || "—"}</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6 border border-border shadow-sm bg-white">
+              <div className="flex items-center gap-2 mb-4">
+                <Paperclip className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-bold font-serif text-slate-900">
+                  {t({ uz: "Yuklangan hujjatlar", en: "Uploaded documents", ru: "Загруженные документы" })}
+                </h3>
+                <Badge className="bg-slate-100 text-slate-700 border-slate-200 ml-auto">{documents.length}</Badge>
+              </div>
+              {documents.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  {t({ uz: "Hujjatlar topilmadi.", en: "No documents found.", ru: "Документы не найдены." })}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {documents.map((document: any) => (
+                    <button
+                      type="button"
+                      key={document.id}
+                      onClick={() => handleDocumentDownload(document)}
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm hover:border-primary hover:bg-white"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{getDocumentTypeLabel(document.docType, locale)}</p>
+                        <p className="text-slate-500 truncate">{document.fileName}</p>
+                      </div>
+                      <span className="inline-flex h-9 items-center rounded-lg border-2 border-border bg-white px-4 text-sm font-semibold text-foreground shrink-0">
+                        {t({ uz: "Ochish", en: "Open", ru: "Открыть" })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

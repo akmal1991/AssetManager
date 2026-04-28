@@ -340,7 +340,7 @@ export default function NewSubmissionWizard() {
   return (
     <DashboardLayout>
       <PageTransition>
-        <div className="max-w-4xl mx-auto py-8">
+        <div className="w-full max-w-4xl min-w-0 mx-auto py-6 md:py-8">
           <div className="mb-10">
             <h2 className="text-3xl font-serif font-bold text-primary">
               {t({
@@ -381,7 +381,7 @@ export default function NewSubmissionWizard() {
             ))}
           </div>
 
-          <Card className="p-8 shadow-xl border-0">
+          <Card className="p-4 sm:p-6 md:p-8 shadow-xl border-0">
             {errors.form && (
               <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
@@ -562,9 +562,9 @@ export default function NewSubmissionWizard() {
                 )}
               </div>
             ) : (
-              <div className="space-y-6 animate-in fade-in zoom-in duration-500">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
+              <div className="min-w-0 space-y-6 animate-in fade-in zoom-in duration-500">
+                <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
                     <h3 className="text-2xl font-bold font-serif text-slate-800">
                       {t({
                         uz: "4. Yakuniy tekshiruv va hujjatlarni yuklash",
@@ -572,7 +572,7 @@ export default function NewSubmissionWizard() {
                         ru: "4. Финальная проверка и загрузка документов",
                       })}
                     </h3>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-sm text-slate-500 mt-1 break-words">
                       {t({
                         uz: "Ma'lumotlarni tekshiring, barcha majburiy fayllarni biriktiring va yakuniy yuborishni tasdiqlang.",
                         en: "Review the information, attach all required files, and confirm the final submission.",
@@ -581,7 +581,7 @@ export default function NewSubmissionWizard() {
                     </p>
                   </div>
                   {!submissionId && (
-                    <Button type="button" variant="outline" onClick={handleBack} className="w-full md:w-auto">
+                    <Button type="button" variant="outline" onClick={handleBack} className="w-full md:w-auto shrink-0">
                       <ArrowLeft className="mr-2 h-4 w-4" />
                       {t({
                         uz: "Oldingi bosqichga qaytish",
@@ -592,32 +592,32 @@ export default function NewSubmissionWizard() {
                   )}
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
                     <h4 className="text-sm font-bold uppercase tracking-wide text-slate-600 mb-4">
                       {t({ uz: "Yuboriladigan ma'lumotlar", en: "Submission details", ru: "Данные для отправки" })}
                     </h4>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                       {summaryItems.map((item) => (
-                        <div key={item.label} className="rounded-xl bg-white p-4 border border-slate-200">
+                        <div key={item.label} className="min-w-0 rounded-xl bg-white p-4 border border-slate-200">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                             {item.label}
                           </p>
-                          <p className="mt-1 text-sm font-medium text-slate-800">{item.value}</p>
+                          <p className="mt-1 text-sm font-medium text-slate-800 break-words">{item.value}</p>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-4 rounded-xl bg-white p-4 border border-slate-200">
+                    <div className="mt-4 min-w-0 rounded-xl bg-white p-4 border border-slate-200">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                         {t({ uz: "Annotatsiya", en: "Abstract", ru: "Аннотация" })}
                       </p>
-                      <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">
+                      <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap break-words">
                         {formData.abstract || t({ uz: "Kiritilmagan", en: "Not provided", ru: "Не указано" })}
                       </p>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
                     <h4 className="text-sm font-bold uppercase tracking-wide text-slate-600 mb-4">
                       {t({ uz: "Majburiy hujjatlar", en: "Required documents", ru: "Обязательные документы" })}
                     </h4>
@@ -629,23 +629,23 @@ export default function NewSubmissionWizard() {
                         return (
                           <div
                             key={doc.type}
-                            className={`rounded-xl border p-4 flex items-center justify-between gap-3 transition-colors ${
+                            className={`min-w-0 rounded-xl border p-4 flex flex-col gap-3 transition-colors sm:flex-row sm:items-center sm:justify-between ${
                               file
                                 ? "border-primary/30 bg-primary/5"
                                 : "border-dashed border-slate-300 bg-slate-50"
                             }`}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex w-full items-center gap-3 min-w-0">
                               <div
-                                className={`p-3 rounded-lg ${
+                                className={`shrink-0 p-3 rounded-lg ${
                                   file ? "bg-primary text-white shadow-sm" : "bg-slate-200 text-slate-500"
                                 }`}
                               >
                                 <FileType className="h-5 w-5" />
                               </div>
                               <div className="min-w-0">
-                                <p className="font-semibold text-sm text-slate-800">{doc.label}</p>
-                                <p className="text-xs text-slate-500 truncate mt-0.5">
+                                <p className="font-semibold text-sm text-slate-800 break-words">{doc.label}</p>
+                                <p className="text-xs text-slate-500 break-words mt-0.5">
                                   {file
                                     ? `${file.name} - ${(file.size / 1024 / 1024).toFixed(1)} MB`
                                     : t({
@@ -656,7 +656,7 @@ export default function NewSubmissionWizard() {
                                 </p>
                               </div>
                             </div>
-                            <div className="shrink-0">
+                            <div className="w-full shrink-0 sm:w-auto">
                               {status === "done" ? (
                                 <CheckCircle className="h-6 w-6 text-emerald-500" />
                               ) : status === "uploading" ? (
@@ -671,7 +671,7 @@ export default function NewSubmissionWizard() {
                                       handleFileSelect(doc.type, event.target.files?.[0] || null)
                                     }
                                   />
-                                  <div className="bg-white border border-slate-200 text-slate-700 hover:bg-primary hover:text-white hover:border-primary transition-colors px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
+                                  <div className="w-full bg-white border border-slate-200 text-slate-700 hover:bg-primary hover:text-white hover:border-primary transition-colors px-4 py-2 rounded-lg text-sm font-medium shadow-sm text-center sm:w-auto">
                                     {file
                                       ? t({ uz: "Almashtirish", en: "Replace", ru: "Заменить" })
                                       : t({ uz: "Tanlash", en: "Select", ru: "Выбрать" })}

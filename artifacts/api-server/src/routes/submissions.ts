@@ -130,19 +130,34 @@ function formatSub(row: any) {
   };
 }
 
+function formatDocument(document: typeof documentsTable.$inferSelect) {
+  return {
+    ...document,
+    downloadUrl: `/api/submissions/${document.submissionId}/documents/${document.id}/download`,
+  };
+}
+
 function buildReviewSummary(reviews: Array<any>) {
+  const pending = reviews.filter((review) => review.status === "pending");
   const submitted = reviews.filter((review) => review.status === "submitted");
+  const latestPending = pending
+    .filter((review) => review.assignedAt)
+    .sort((left, right) => new Date(right.assignedAt).getTime() - new Date(left.assignedAt).getTime())[0] ?? pending[0];
   const latestSubmitted = submitted
     .filter((review) => review.submittedAt)
     .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())[0];
 
   return {
     totalAssigned: reviews.length,
-    pendingCount: reviews.filter((review) => review.status === "pending").length,
+    pendingCount: pending.length,
     submittedCount: submitted.length,
     positiveCount: submitted.filter((review) => review.classification === "positive").length,
     negativeCount: submitted.filter((review) => review.classification === "negative").length,
     assignedExpertNames: reviews.map((review) => review.reviewerName).filter(Boolean),
+    assignedExpertIds: reviews.map((review) => review.reviewerId).filter((id) => id != null),
+    pendingReviewId: latestPending?.id ?? null,
+    pendingExpertId: latestPending?.reviewerId ?? null,
+    pendingExpertName: latestPending?.reviewerName ?? null,
     latestReviewId: latestSubmitted?.id ?? null,
     latestVerdict: latestSubmitted?.verdict ?? null,
     latestClassification: latestSubmitted?.classification ?? null,
@@ -290,7 +305,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 
     res.json({
       ...formatSub(row),
-      documents: docs,
+      documents: docs.map(formatDocument),
       reviews: reviews.map(r => ({ ...r.review, expertId: r.review.reviewerId, expertName: r.reviewerName, reviewerName: r.reviewerName })),
       reviewSummary: buildReviewSummary(reviews.map((review) => ({ ...review.review, reviewerName: review.reviewerName }))),
     });
@@ -357,18 +372,59 @@ router.post("/:id/assign", requireAuth, requireRole("editor", "publisher", "admi
       res.status(400).json({ error: "Active expert not found" });
       return;
     }
-    const existing = await db.select().from(reviewsTable)
-      .where(and(eq(reviewsTable.submissionId, submissionId), eq(reviewsTable.reviewerId, numericReviewerId)))
-      .limit(1);
-    if (existing[0]) {
-      if (current[0].status === "submitted") {
-        await db.update(submissionsTable)
-          .set({ status: "under_review", updatedAt: new Date() })
-          .where(eq(submissionsTable.id, submissionId));
-      }
-      res.json(existing[0]);
+    const existingForExpert = await db.select().from(reviewsTable)
+      .where(and(eq(reviewsTable.submissionId, submissionId), eq(reviewsTable.reviewerId, numericReviewerId)));
+    const existingPending = existingForExpert.find((review) => review.status === "pending");
+    if (existingPending) {
+      await db.update(submissionsTable)
+        .set({ status: "under_review", updatedAt: new Date() })
+        .where(eq(submissionsTable.id, submissionId));
+      res.json(existingPending);
       return;
     }
+    if (existingForExpert.some((review) => review.status === "submitted")) {
+      res.status(400).json({ error: "This expert has already submitted a conclusion for this submission" });
+      return;
+    }
+
+    const pendingAssignments = await db
+      .select({ review: reviewsTable, reviewerName: usersTable.fullName })
+      .from(reviewsTable)
+      .leftJoin(usersTable, eq(reviewsTable.reviewerId, usersTable.id))
+      .where(and(eq(reviewsTable.submissionId, submissionId), eq(reviewsTable.status, "pending")));
+    const activePending = pendingAssignments
+      .sort((left, right) => new Date(right.review.assignedAt).getTime() - new Date(left.review.assignedAt).getTime())[0];
+
+    if (activePending) {
+      const updated = await db.update(reviewsTable).set({
+        reviewerId: numericReviewerId,
+        scientificSignificance: null,
+        methodology: null,
+        structureClarity: null,
+        originality: null,
+        conclusionSummary: null,
+        conclusionForm: {},
+        strengths: null,
+        weaknesses: null,
+        recommendation: null,
+        commentsForAuthor: null,
+        commentsForEditor: null,
+        verdict: null,
+        classification: null,
+        status: "pending",
+        assignedAt: new Date(),
+        submittedAt: null,
+      }).where(eq(reviewsTable.id, activePending.review.id)).returning();
+      await db.update(submissionsTable).set({ status: "under_review", updatedAt: new Date() }).where(eq(submissionsTable.id, submissionId));
+      await logAction(req, "expert_reassigned", {
+        entityType: "submission",
+        entityId: submissionId,
+        detail: `Expert reassigned: ${activePending.reviewerName ?? `#${activePending.review.reviewerId}`} → ${reviewer[0].fullName} <${reviewer[0].email}>`,
+      });
+      res.json(updated[0]);
+      return;
+    }
+
     const inserted = await db.insert(reviewsTable).values({
       submissionId,
       reviewerId: numericReviewerId,
@@ -419,7 +475,7 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
         .set({ fileName: req.file.originalname, fileSize: req.file.size, filePath: req.file.path })
         .where(eq(documentsTable.id, existing[0].id));
       const updated = await db.select().from(documentsTable).where(eq(documentsTable.id, existing[0].id)).limit(1);
-      res.json(updated[0]);
+      res.json(formatDocument(updated[0]));
       return;
     }
     const inserted = await db.insert(documentsTable).values({
@@ -429,7 +485,39 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
       fileSize: req.file.size,
       filePath: req.file.path,
     }).returning();
-    res.json(inserted[0]);
+    res.json(formatDocument(inserted[0]));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/:id/documents/:documentId/download", requireAuth, async (req, res) => {
+  try {
+    const submissionId = parseInt(req.params.id);
+    const documentId = parseInt(req.params.documentId);
+
+    const access = await ensureSubmissionViewAccess(req as any, submissionId);
+    if ("error" in access) {
+      res.status(access.error.status).json({ error: access.error.message });
+      return;
+    }
+
+    const document = await db
+      .select()
+      .from(documentsTable)
+      .where(and(eq(documentsTable.id, documentId), eq(documentsTable.submissionId, submissionId)))
+      .limit(1);
+
+    if (!document[0]) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+    if (!fs.existsSync(document[0].filePath)) {
+      res.status(404).json({ error: "Document file not found" });
+      return;
+    }
+
+    res.download(document[0].filePath, document[0].fileName);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

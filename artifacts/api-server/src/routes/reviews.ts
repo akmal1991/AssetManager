@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { reviewsTable, submissionsTable, usersTable } from "@workspace/db/schema";
+import { reviewsTable, submissionsTable, usersTable, documentsTable, departmentsTable } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 
@@ -45,7 +45,14 @@ function ensureEditableExpertReview(req: any, review: typeof reviewsTable.$infer
   return { review };
 }
 
-function mapReviewRow(row: any) {
+function formatDocument(document: typeof documentsTable.$inferSelect) {
+  return {
+    ...document,
+    downloadUrl: `/api/submissions/${document.submissionId}/documents/${document.id}/download`,
+  };
+}
+
+function mapReviewRow(row: any, details?: { author?: any; documents?: Array<any>; departmentName?: string | null }) {
   return {
     ...row.review,
     submissionTitle: row.submissionTitle,
@@ -59,6 +66,9 @@ function mapReviewRow(row: any) {
       scientificDirection: row.submissionScientificDirection,
       authorName: row.authorName,
       status: row.submissionStatus,
+      departmentName: details?.departmentName ?? null,
+      documents: details?.documents ?? [],
+      author: details?.author ?? null,
     },
   };
 }
@@ -87,18 +97,71 @@ router.get("/", requireAuth, requireRole("reviewer", "publisher", "admin", "edit
 
     const submissionIds = rows.map((row) => row.review.submissionId);
     const submissions = submissionIds.length > 0
-      ? await db.select({ id: submissionsTable.id, authorId: submissionsTable.authorId }).from(submissionsTable).where(inArray(submissionsTable.id, submissionIds))
+      ? await db
+        .select({ id: submissionsTable.id, authorId: submissionsTable.authorId, departmentId: submissionsTable.departmentId })
+        .from(submissionsTable)
+        .where(inArray(submissionsTable.id, submissionIds))
       : [];
     const authorUserIds = submissions.map((submission) => submission.authorId);
     const authors = authorUserIds.length > 0
-      ? await db.select({ id: usersTable.id, fullName: usersTable.fullName }).from(usersTable).where(inArray(usersTable.id, authorUserIds))
+      ? await db
+        .select({
+          id: usersTable.id,
+          fullName: usersTable.fullName,
+          email: usersTable.email,
+          phone: usersTable.phone,
+          scientificDegree: usersTable.scientificDegree,
+          position: usersTable.position,
+        })
+        .from(usersTable)
+        .where(inArray(usersTable.id, authorUserIds))
+      : [];
+    const departmentIds = submissions.map((submission) => submission.departmentId).filter((value): value is number => value != null);
+    const departments = departmentIds.length > 0
+      ? await db
+        .select({ id: departmentsTable.id, name: departmentsTable.name })
+        .from(departmentsTable)
+        .where(inArray(departmentsTable.id, departmentIds))
+      : [];
+    const documents = submissionIds.length > 0
+      ? await db.select().from(documentsTable).where(inArray(documentsTable.submissionId, submissionIds))
       : [];
     const authorMap = new Map(submissions.map((submission) => {
       const author = authors.find((userRow) => userRow.id === submission.authorId);
-      return [submission.id, author?.fullName ?? null] as const;
+      const department = departments.find((departmentRow) => departmentRow.id === submission.departmentId);
+      return [submission.id, {
+        authorName: author?.fullName ?? null,
+        author: author
+          ? {
+            id: author.id,
+            fullName: author.fullName,
+            email: author.email,
+            phone: author.phone,
+            scientificDegree: author.scientificDegree,
+            position: author.position,
+          }
+          : null,
+        departmentName: department?.name ?? null,
+      }] as const;
     }));
+    const documentMap = new Map<number, Array<any>>();
+    for (const document of documents) {
+      const bucket = documentMap.get(document.submissionId) ?? [];
+      bucket.push(formatDocument(document));
+      documentMap.set(document.submissionId, bucket);
+    }
 
-    res.json(rows.map((row) => mapReviewRow({ ...row, authorName: authorMap.get(row.review.submissionId) ?? null })));
+    res.json(rows.map((row) => {
+      const detail = authorMap.get(row.review.submissionId);
+      return mapReviewRow(
+        { ...row, authorName: detail?.authorName ?? null },
+        {
+          author: detail?.author ?? null,
+          departmentName: detail?.departmentName ?? null,
+          documents: documentMap.get(row.review.submissionId) ?? [],
+        },
+      );
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -140,11 +203,37 @@ router.get("/:id", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
-    const submission = await db.select({ authorId: submissionsTable.authorId }).from(submissionsTable).where(eq(submissionsTable.id, r.review.submissionId)).limit(1);
+    const submission = await db
+      .select({ authorId: submissionsTable.authorId, departmentId: submissionsTable.departmentId })
+      .from(submissionsTable)
+      .where(eq(submissionsTable.id, r.review.submissionId))
+      .limit(1);
     const author = submission[0]
-      ? await db.select({ fullName: usersTable.fullName }).from(usersTable).where(eq(usersTable.id, submission[0].authorId)).limit(1)
+      ? await db
+        .select({
+          id: usersTable.id,
+          fullName: usersTable.fullName,
+          email: usersTable.email,
+          phone: usersTable.phone,
+          scientificDegree: usersTable.scientificDegree,
+          position: usersTable.position,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.id, submission[0].authorId))
+        .limit(1)
       : [];
-    res.json(mapReviewRow({ ...r, authorName: author[0]?.fullName ?? null }));
+    const department = submission[0]?.departmentId
+      ? await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, submission[0].departmentId)).limit(1)
+      : [];
+    const documents = await db.select().from(documentsTable).where(eq(documentsTable.submissionId, r.review.submissionId));
+    res.json(mapReviewRow(
+      { ...r, authorName: author[0]?.fullName ?? null },
+      {
+        author: author[0] ?? null,
+        departmentName: department[0]?.name ?? null,
+        documents: documents.map(formatDocument),
+      },
+    ));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

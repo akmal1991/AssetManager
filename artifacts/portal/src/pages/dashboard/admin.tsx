@@ -17,6 +17,7 @@ import {
   useDeleteAdminUser,
   useResetUserPassword,
   useGetSubmissions,
+  useAssignReviewer,
   getGetAuditLogsQueryOptions,
   getGetEmailTemplatesQueryOptions,
 } from "@workspace/api-client-react";
@@ -41,7 +42,7 @@ import {
   STATUS_COLORS,
 } from "@/lib/utils";
 import { Link } from "wouter";
-import { updateExpertProfile } from "@/lib/experts";
+import { fetchExperts, updateExpertProfile } from "@/lib/experts";
 import { useLocale } from "@/lib/i18n";
 
 /* ── helpers ── */
@@ -87,6 +88,7 @@ const ACTION_META: Record<string, { icon: any; color: string; label: string }> =
   submission_created:        { icon: FileText,       color: "bg-blue-100 text-blue-700",      label: "Yangi ariza" },
   submission_status_changed: { icon: Activity,      color: "bg-amber-100 text-amber-700",    label: "Ariza holati" },
   expert_assigned:           { icon: UserCheck,      color: "bg-indigo-100 text-indigo-700",  label: "Ekspert tayinlandi" },
+  expert_reassigned:         { icon: RefreshCw,      color: "bg-cyan-100 text-cyan-700",      label: "Ekspert qayta tayinlandi" },
   email_template_updated:    { icon: Mail,           color: "bg-pink-100 text-pink-700",      label: "Shablon yangilandi" },
   export_users:              { icon: Download,       color: "bg-teal-100 text-teal-700",      label: "Export: foydalanuvchilar" },
   export_submissions:        { icon: Download,       color: "bg-teal-100 text-teal-700",      label: "Export: arizalar" },
@@ -127,6 +129,10 @@ export default function AdminDashboard() {
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetAdminStats();
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useGetUsers();
   const { data: submissionsData, isLoading: submissionsLoading, refetch: refetchSubmissions } = useGetSubmissions({ limit: 200 });
+  const { data: assignableExperts = [], isLoading: assignableExpertsLoading, isError: assignableExpertsError, refetch: refetchAssignableExperts } = useQuery({
+    queryKey: ["experts", "admin-reassignment"],
+    queryFn: fetchExperts,
+  });
   const { data: departments } = useGetDepartments();
   const { data: departmentsFull, refetch: refetchDepts } = useGetDepartments();
   const { data: directions, refetch: refetchDirs } = useGetScientificDirections();
@@ -142,6 +148,7 @@ export default function AdminDashboard() {
   const createUserMutation    = useCreateAdminUser();
   const deleteUserMutation    = useDeleteAdminUser();
   const resetPasswordMutation = useResetUserPassword();
+  const assignExpertMutation  = useAssignReviewer();
   const createDeptMutation    = useCreateDepartment();
   const deleteDeptMutation    = useDeleteDepartment();
   const createDirMutation     = useCreateScientificDirection();
@@ -180,6 +187,8 @@ export default function AdminDashboard() {
 
   /* ── Local state: reports tab ── */
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [reassigningSubmissionId, setReassigningSubmissionId] = useState<number | null>(null);
+  const [expertSelectionBySubmission, setExpertSelectionBySubmission] = useState<Record<number, string>>({});
 
   /* ═══ HANDLERS ═══ */
   async function handleRoleChange(id: number, role: string) {
@@ -254,6 +263,68 @@ export default function AdminDashboard() {
       refetchUsers();
     } catch (err: any) {
       toast({ title: "Xatolik", description: err?.message || "Ekspert profilini saqlab bo'lmadi", variant: "destructive" });
+    }
+  }
+
+  const getSelectedExpertId = (submissionId: number) => expertSelectionBySubmission[submissionId] ?? "";
+  const setSelectedExpertId = (submissionId: number, value: string) => {
+    setExpertSelectionBySubmission((current) => ({ ...current, [submissionId]: value }));
+  };
+
+  const startExpertReassignment = (submission: any) => {
+    const pendingExpertId = submission.reviewSummary?.pendingExpertId;
+    setReassigningSubmissionId(submission.id);
+    setSelectedExpertId(submission.id, pendingExpertId ? String(pendingExpertId) : "");
+    refetchAssignableExperts();
+  };
+
+  async function handleReassignExpert(submission: any) {
+    const selectedExpertId = getSelectedExpertId(submission.id);
+    const numericExpertId = Number(selectedExpertId);
+    if (!Number.isInteger(numericExpertId) || numericExpertId <= 0) {
+      toast({
+        title: t({ uz: "Ekspert tanlanmagan", en: "No expert selected", ru: "Эксперт не выбран" }),
+        description: t({
+          uz: "Davom etish uchun faol ekspertni tanlang.",
+          en: "Select an active expert before continuing.",
+          ru: "Выберите активного эксперта, чтобы продолжить.",
+        }),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await assignExpertMutation.mutateAsync({
+        id: submission.id,
+        data: { expertId: numericExpertId, reviewerId: numericExpertId } as any,
+      });
+      toast({
+        title: t({ uz: "Ekspert yangilandi", en: "Expert updated", ru: "Эксперт обновлен" }),
+        description: t({
+          uz: "Ilmiy ish bo'yicha ekspert tayinlovi muvaffaqiyatli yangilandi.",
+          en: "The expert assignment for this scientific work was updated successfully.",
+          ru: "Назначение эксперта для этой научной работы успешно обновлено.",
+        }),
+      });
+      setReassigningSubmissionId(null);
+      setExpertSelectionBySubmission((current) => {
+        const next = { ...current };
+        delete next[submission.id];
+        return next;
+      });
+      await Promise.all([refetchSubmissions(), refetchStats(), refetchAudit(), refetchAssignableExperts()]);
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.message;
+      toast({
+        title: t({ uz: "Xatolik", en: "Error", ru: "Ошибка" }),
+        description: message || t({
+          uz: "Ekspertni qayta tayinlab bo'lmadi.",
+          en: "Could not reassign the expert.",
+          ru: "Не удалось переназначить эксперта.",
+        }),
+        variant: "destructive",
+      });
     }
   }
 
@@ -375,6 +446,7 @@ export default function AdminDashboard() {
       submission_created: t({ uz: "Yangi ariza", en: "New submission", ru: "Новая заявка" }),
       submission_status_changed: t({ uz: "Ariza holati", en: "Submission status", ru: "Статус заявки" }),
       expert_assigned: t({ uz: "Ekspert tayinlandi", en: "Expert assigned", ru: "Эксперт назначен" }),
+      expert_reassigned: t({ uz: "Ekspert qayta tayinlandi", en: "Expert reassigned", ru: "Эксперт переназначен" }),
       email_template_updated: t({ uz: "Shablon yangilandi", en: "Template updated", ru: "Шаблон обновлен" }),
       export_users: t({ uz: "Export: foydalanuvchilar", en: "Export: users", ru: "Экспорт: пользователи" }),
       export_submissions: t({ uz: "Export: arizalar", en: "Export: submissions", ru: "Экспорт: заявки" }),
@@ -566,6 +638,86 @@ export default function AdminDashboard() {
                         <tr key={submission.id} className={cn("hover:bg-slate-50/60 transition-colors", idx % 2 === 0 ? "bg-white" : "bg-slate-50/20")}>
                           <td className="px-5 py-3.5">
                             <p className="font-medium text-slate-800">{submission.title}</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                                {t({ uz: "Ekspert", en: "Expert", ru: "Эксперт" })}: {" "}
+                                <span className={submission.reviewSummary?.pendingExpertName || submission.reviewSummary?.assignedExpertNames?.[0] ? "text-slate-800" : "text-slate-400"}>
+                                  {submission.reviewSummary?.pendingExpertName || submission.reviewSummary?.assignedExpertNames?.[0] || t({ uz: "Tayinlanmagan", en: "Not assigned", ru: "Не назначен" })}
+                                </span>
+                              </span>
+                              {!["accepted", "rejected", "published"].includes(submission.status) && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => startExpertReassignment(submission)}
+                                >
+                                  <UserCheck className="mr-1 h-3 w-3" />
+                                  {submission.reviewSummary?.pendingExpertName || submission.reviewSummary?.assignedExpertNames?.[0]
+                                    ? t({ uz: "Almashtirish", en: "Change", ru: "Сменить" })
+                                    : t({ uz: "Tayinlash", en: "Assign", ru: "Назначить" })}
+                                </Button>
+                              )}
+                            </div>
+                            {reassigningSubmissionId === submission.id && (
+                              <div className="mt-3 max-w-xl rounded-xl border border-blue-100 bg-blue-50/40 p-3">
+                                <label className="mb-2 block text-xs font-semibold text-slate-700">
+                                  {submission.reviewSummary?.pendingExpertName || submission.reviewSummary?.assignedExpertNames?.[0]
+                                    ? t({ uz: "Yangi ekspertni tanlang", en: "Select a new expert", ru: "Выберите нового эксперта" })
+                                    : t({ uz: "Ekspertni tanlang", en: "Select an expert", ru: "Выберите эксперта" })}
+                                </label>
+                                <Select
+                                  value={getSelectedExpertId(submission.id)}
+                                  onChange={(event) => setSelectedExpertId(submission.id, event.target.value)}
+                                  className="h-9 bg-white text-sm"
+                                  disabled={assignableExpertsLoading || assignExpertMutation.isPending}
+                                >
+                                  <option value="">{t({ uz: "Ekspertni tanlang...", en: "Choose an expert...", ru: "Выберите эксперта..." })}</option>
+                                  {assignableExperts.map((expert) => (
+                                    <option key={expert.id} value={expert.id}>
+                                      {expert.fullName} ({(expert.expertSpecialties || []).join(", ") || expert.scientificDegree || "Expert"})
+                                    </option>
+                                  ))}
+                                </Select>
+                                {assignableExpertsError && (
+                                  <p className="mt-2 text-xs text-red-600">
+                                    {t({ uz: "Faol ekspertlar ro'yxatini yuklab bo'lmadi.", en: "Could not load active experts.", ru: "Не удалось загрузить активных экспертов." })}
+                                  </p>
+                                )}
+                                {!assignableExpertsLoading && !assignableExpertsError && assignableExperts.length === 0 && (
+                                  <p className="mt-2 text-xs text-amber-700">
+                                    {t({ uz: "Faol ekspert topilmadi.", en: "No active experts found.", ru: "Активные эксперты не найдены." })}
+                                  </p>
+                                )}
+                                <div className="mt-3 flex flex-wrap justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => handleReassignExpert(submission)}
+                                    disabled={
+                                      !getSelectedExpertId(submission.id) ||
+                                      getSelectedExpertId(submission.id) === (submission.reviewSummary?.pendingExpertId ? String(submission.reviewSummary.pendingExpertId) : "") ||
+                                      assignableExpertsLoading ||
+                                      assignExpertMutation.isPending
+                                    }
+                                  >
+                                    {assignExpertMutation.isPending
+                                      ? t({ uz: "Saqlanmoqda...", en: "Saving...", ru: "Сохранение..." })
+                                      : t({ uz: "Tasdiqlash", en: "Confirm", ru: "Подтвердить" })}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="border border-slate-200 bg-white"
+                                    onClick={() => setReassigningSubmissionId(null)}
+                                  >
+                                    {t({ uz: "Bekor qilish", en: "Cancel", ru: "Отмена" })}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                             <p className="text-xs text-slate-400 mt-1">
                               {submission.scientificDirection || t({ uz: "Yo'nalish ko'rsatilmagan", en: "Direction not specified", ru: "Направление не указано" })}
                             </p>

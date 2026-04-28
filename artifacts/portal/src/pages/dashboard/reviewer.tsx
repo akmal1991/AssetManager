@@ -1,13 +1,15 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ClipboardEdit, FileCheck, Clock, FileText, Users } from "lucide-react";
+import { ClipboardEdit, FileCheck, Clock, FileText, Users, Paperclip, UserRound } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button, Card, Badge, PageTransition } from "@/components/ui/shared";
 import { useGetReviews } from "@workspace/api-client-react";
 import { fetchExperts } from "@/lib/experts";
 import { formatDate, getLocalizedReviewVerdict } from "@/lib/utils";
+import { downloadProtectedDocument } from "@/lib/documents";
 import { useLocale } from "@/lib/i18n";
+import { useToast } from "@/hooks/use-toast";
 
 function getClassificationCopy(classification: string | null | undefined, locale: "uz" | "en" | "ru") {
   const labels = {
@@ -18,16 +20,41 @@ function getClassificationCopy(classification: string | null | undefined, locale
   return labels[classification as keyof typeof labels]?.[locale] ?? classification;
 }
 
+function getDocumentTypeLabel(docType: string, locale: "uz" | "en" | "ru") {
+  const labels = {
+    main_document: { uz: "Asosiy fayl", en: "Main document", ru: "Основной документ" },
+    curriculum: { uz: "O'quv reja", en: "Curriculum", ru: "Учебный план" },
+    syllabus: { uz: "Sillabus", en: "Syllabus", ru: "Силлабус" },
+    plagiarism_report: { uz: "Plagiat hisoboti", en: "Plagiarism report", ru: "Отчет о плагиате" },
+    internal_review: { uz: "Ichki taqriz", en: "Internal review", ru: "Внутренняя рецензия" },
+    external_review: { uz: "Tashqi taqriz", en: "External review", ru: "Внешняя рецензия" },
+  } as const;
+  return labels[docType as keyof typeof labels]?.[locale] ?? docType;
+}
+
 export default function ExpertDashboard() {
   const { data: reviews, isLoading } = useGetReviews();
   const { data: experts = [] } = useQuery({ queryKey: ["experts"], queryFn: fetchExperts });
   const { locale, t, withLocale, stripLocale, location } = useLocale();
+  const { toast } = useToast();
 
   const pending = reviews?.filter((review) => review.status === "pending") || [];
   const submitted = reviews?.filter((review) => review.status === "submitted") || [];
   const currentPath = stripLocale(location);
   const isHistory = currentPath === "/dashboard/expert/history";
   const isExperts = currentPath === "/dashboard/expert/experts";
+
+  const handleDocumentDownload = async (document: any) => {
+    try {
+      await downloadProtectedDocument(document);
+    } catch (error: any) {
+      toast({
+        title: t({ uz: "Hujjat ochilmadi", en: "Document could not be opened", ru: "Не удалось открыть документ" }),
+        description: error?.message || t({ uz: "Hujjatni yuklab bo'lmadi.", en: "The document could not be downloaded.", ru: "Не удалось скачать документ." }),
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -114,24 +141,73 @@ export default function ExpertDashboard() {
                 </Card>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {pending.map((review) => (
-                    <Card key={review.id} className="p-6 border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-all bg-white flex flex-col">
-                      <div className="flex justify-between items-start mb-4">
-                        <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                          {t({ uz: "Xulosa ID", en: "Conclusion ID", ru: "ID заключения" })}: #{review.id}
-                        </span>
-                        <span className="text-xs text-slate-500 font-medium">{formatDate(review.assignedAt, locale)}</span>
-                      </div>
-                      <h4 className="text-lg font-bold mb-2 text-slate-900 line-clamp-2">{review.submissionTitle}</h4>
-                      <p className="text-sm text-slate-500 mb-6 flex-1">{(review as any).submission?.scientificDirection}</p>
-                      <Link href={withLocale(`/reviews/${review.id}`)}>
-                        <Button className="w-full bg-primary text-white hover:bg-primary/90 shadow-sm h-12 text-base">
-                          <ClipboardEdit className="mr-2 h-5 w-5" />
-                          {t({ uz: "Ekspert xulosasini boshlash", en: "Start expert conclusion", ru: "Начать экспертное заключение" })}
-                        </Button>
-                      </Link>
-                    </Card>
-                  ))}
+                  {pending.map((review) => {
+                    const submission = (review as any).submission;
+                    const author = submission?.author;
+                    const documents = submission?.documents ?? [];
+
+                    return (
+                      <Card key={review.id} className="p-6 border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-all bg-white flex flex-col">
+                        <div className="flex justify-between items-start mb-4">
+                          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                            {t({ uz: "Xulosa ID", en: "Conclusion ID", ru: "ID заключения" })}: #{review.id}
+                          </span>
+                          <span className="text-xs text-slate-500 font-medium">{formatDate(review.assignedAt, locale)}</span>
+                        </div>
+                        <h4 className="text-lg font-bold mb-2 text-slate-900 line-clamp-2">{review.submissionTitle}</h4>
+                        <p className="text-sm text-slate-500 mb-4">{submission?.scientificDirection}</p>
+
+                        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-5">
+                          <div className="flex items-start gap-3">
+                            <UserRound className="h-4 w-4 text-slate-500 mt-0.5" />
+                            <div className="text-sm text-slate-700">
+                              <p className="font-semibold text-slate-900">
+                                {author?.fullName || submission?.authorName || t({ uz: "Muallif ko'rsatilmagan", en: "Author not provided", ru: "Автор не указан" })}
+                              </p>
+                              <p>{submission?.departmentName || t({ uz: "Bo'lim ko'rsatilmagan", en: "Department not provided", ru: "Подразделение не указано" })}</p>
+                              {author?.email && <p className="text-slate-500">{author.email}</p>}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Paperclip className="h-4 w-4 text-slate-500" />
+                              <p className="text-sm font-semibold text-slate-800">
+                                {t({ uz: "Biriktirilgan hujjatlar", en: "Attached documents", ru: "Прикрепленные документы" })}
+                              </p>
+                              <Badge className="bg-white text-slate-700 border border-slate-200">{documents.length}</Badge>
+                            </div>
+                            {documents.length === 0 ? (
+                              <p className="text-sm text-slate-400">
+                                {t({ uz: "Hujjatlar hali yuklanmagan.", en: "No documents uploaded yet.", ru: "Документы пока не загружены." })}
+                              </p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {documents.map((document: any) => (
+                                  <button
+                                    type="button"
+                                    key={document.id}
+                                    onClick={() => handleDocumentDownload(document)}
+                                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-primary hover:text-primary"
+                                  >
+                                    <Paperclip className="h-3.5 w-3.5" />
+                                    {getDocumentTypeLabel(document.docType, locale)}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <Link href={withLocale(`/reviews/${review.id}`)}>
+                          <Button className="w-full bg-primary text-white hover:bg-primary/90 shadow-sm h-12 text-base">
+                            <ClipboardEdit className="mr-2 h-5 w-5" />
+                            {t({ uz: "Ekspert xulosasini boshlash", en: "Start expert conclusion", ru: "Начать экспертное заключение" })}
+                          </Button>
+                        </Link>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </section>
