@@ -5,7 +5,7 @@ import { ClipboardEdit, FileCheck, Clock, FileText, Users, Paperclip, UserRound 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button, Card, Badge, PageTransition } from "@/components/ui/shared";
 import { useGetReviews } from "@workspace/api-client-react";
-import { fetchExperts } from "@/lib/experts";
+import { EXPERTS_QUERY_KEY, fetchExperts } from "@/lib/experts";
 import { formatDate, getLocalizedReviewVerdict } from "@/lib/utils";
 import { downloadProtectedDocument } from "@/lib/documents";
 import { useLocale } from "@/lib/i18n";
@@ -34,7 +34,13 @@ function getDocumentTypeLabel(docType: string, locale: "uz" | "en" | "ru") {
 
 export default function ExpertDashboard() {
   const { data: reviews, isLoading } = useGetReviews();
-  const { data: experts = [] } = useQuery({ queryKey: ["experts"], queryFn: fetchExperts });
+  const { data: experts = [] } = useQuery({
+    queryKey: EXPERTS_QUERY_KEY,
+    queryFn: fetchExperts,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
   const { locale, t, withLocale, stripLocale, location } = useLocale();
   const { toast } = useToast();
 

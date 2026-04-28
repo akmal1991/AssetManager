@@ -15,9 +15,11 @@ export interface ExpertProfile {
   createdAt?: string;
 }
 
+export const EXPERTS_QUERY_KEY = ["experts", "assignable"] as const;
+
 export async function fetchExperts(): Promise<ExpertProfile[]> {
   const token = localStorage.getItem("portal_token");
-  const response = await fetch("/api/users/experts", {
+  const response = await fetch(`/api/users/experts?_=${Date.now()}`, {
     cache: "no-store",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });

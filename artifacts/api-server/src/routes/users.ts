@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, departmentsTable } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { logAction } from "../lib/audit.js";
 
@@ -54,13 +54,16 @@ router.get("/", requireAuth, requireRole("admin", "editor", "publisher"), async 
 
 router.get("/experts", requireAuth, requireRole("admin", "editor", "publisher", "reviewer", "author"), async (_req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     const rows = await db
       .select({ user: usersTable, deptName: departmentsTable.name })
       .from(usersTable)
       .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id))
-      .where(and(eq(usersTable.role, "reviewer"), eq(usersTable.expertIsActive, true)));
+      .where(and(inArray(usersTable.role, ["reviewer", "editor"]), eq(usersTable.expertIsActive, true)))
+      .orderBy(usersTable.fullName);
 
-    res.setHeader("Cache-Control", "no-store");
     res.json(rows.map(mapUser));
   } catch (err: any) {
     res.status(500).json({ error: err.message });

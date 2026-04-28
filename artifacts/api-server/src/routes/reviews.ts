@@ -18,6 +18,10 @@ function verdictFromTemplateRecommendation(recommendation?: string | null) {
   return null;
 }
 
+function isAssignedExpertUser(user: { role: string; expertIsActive?: boolean | null }) {
+  return user.role === "reviewer" || (user.role === "editor" && user.expertIsActive === true);
+}
+
 const VALID_VERDICTS = new Set(["accept", "minor_revision", "major_revision", "reject"]);
 
 function scoreOrNull(value: unknown) {
@@ -91,7 +95,7 @@ router.get("/", requireAuth, requireRole("reviewer", "publisher", "admin", "edit
       .leftJoin(submissionsTable, eq(reviewsTable.submissionId, submissionsTable.id))
       .leftJoin(usersTable, eq(reviewsTable.reviewerId, usersTable.id));
 
-    const rows = user.role === "reviewer"
+    const rows = isAssignedExpertUser(user)
       ? await query.where(eq(reviewsTable.reviewerId, user.id))
       : await query;
 
@@ -239,7 +243,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.patch("/:id/draft", requireAuth, requireRole("reviewer"), async (req, res) => {
+router.patch("/:id/draft", requireAuth, requireRole("reviewer", "editor"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const review = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id)).limit(1);
@@ -299,7 +303,7 @@ router.patch("/:id/draft", requireAuth, requireRole("reviewer"), async (req, res
   }
 });
 
-router.patch("/:id", requireAuth, requireRole("reviewer"), async (req, res) => {
+router.patch("/:id", requireAuth, requireRole("reviewer", "editor"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const review = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id)).limit(1);

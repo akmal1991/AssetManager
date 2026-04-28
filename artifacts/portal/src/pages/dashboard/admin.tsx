@@ -42,7 +42,7 @@ import {
   STATUS_COLORS,
 } from "@/lib/utils";
 import { Link } from "wouter";
-import { fetchExperts, updateExpertProfile } from "@/lib/experts";
+import { EXPERTS_QUERY_KEY, fetchExperts, updateExpertProfile } from "@/lib/experts";
 import { useLocale } from "@/lib/i18n";
 
 /* ── helpers ── */
@@ -129,9 +129,12 @@ export default function AdminDashboard() {
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetAdminStats();
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useGetUsers();
   const { data: submissionsData, isLoading: submissionsLoading, refetch: refetchSubmissions } = useGetSubmissions({ limit: 200 });
-  const { data: assignableExperts = [], isLoading: assignableExpertsLoading, isError: assignableExpertsError, refetch: refetchAssignableExperts } = useQuery({
-    queryKey: ["experts", "admin-reassignment"],
+  const { data: assignableExperts = [], isLoading: assignableExpertsLoading, isFetching: assignableExpertsFetching, isError: assignableExpertsError, refetch: refetchAssignableExperts } = useQuery({
+    queryKey: EXPERTS_QUERY_KEY,
     queryFn: fetchExperts,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
   const { data: departments } = useGetDepartments();
   const { data: departmentsFull, refetch: refetchDepts } = useGetDepartments();
@@ -191,11 +194,18 @@ export default function AdminDashboard() {
   const [expertSelectionBySubmission, setExpertSelectionBySubmission] = useState<Record<number, string>>({});
 
   /* ═══ HANDLERS ═══ */
+  const refreshExpertsCache = async () => {
+    await qc.invalidateQueries({
+      predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === EXPERTS_QUERY_KEY[0],
+    });
+    await refetchAssignableExperts();
+  };
+
   async function handleRoleChange(id: number, role: string) {
     try {
       await updateRoleMutation.mutateAsync({ id, data: { role: role as any } });
       toast({ title: "Rol o'zgartirildi" });
-      refetchUsers(); refetchStats();
+      await Promise.all([refetchUsers(), refetchStats(), refreshExpertsCache()]);
     } catch {
       toast({ title: "Xatolik", variant: "destructive" });
     }
@@ -218,7 +228,7 @@ export default function AdminDashboard() {
       toast({ title: "Foydalanuvchi yaratildi", description: `${form.email} tizimga qo'shildi` });
       setShowCreateModal(false);
       setForm({ fullName: "", email: "", password: "", role: "author", departmentId: "", scientificDegree: "none", position: "teacher" });
-      refetchUsers(); refetchStats();
+      await Promise.all([refetchUsers(), refetchStats(), refreshExpertsCache()]);
     } catch (err: any) {
       toast({ title: "Xatolik", description: err?.message || "Yaratishda xatolik", variant: "destructive" });
     }
@@ -229,7 +239,7 @@ export default function AdminDashboard() {
     try {
       await deleteUserMutation.mutateAsync({ id });
       toast({ title: "O'chirildi", description: `${name} tizimdan o'chirildi` });
-      refetchUsers(); refetchStats();
+      await Promise.all([refetchUsers(), refetchStats(), refreshExpertsCache()]);
     } catch (err: any) {
       toast({ title: "Xatolik", description: err?.message || "O'chirishda xatolik", variant: "destructive" });
     }
@@ -260,7 +270,7 @@ export default function AdminDashboard() {
       });
       toast({ title: "Ekspert profili yangilandi" });
       setEditingExpert(null);
-      refetchUsers();
+      await Promise.all([refetchUsers(), refreshExpertsCache()]);
     } catch (err: any) {
       toast({ title: "Xatolik", description: err?.message || "Ekspert profilini saqlab bo'lmadi", variant: "destructive" });
     }
@@ -275,7 +285,7 @@ export default function AdminDashboard() {
     const pendingExpertId = submission.reviewSummary?.pendingExpertId;
     setReassigningSubmissionId(submission.id);
     setSelectedExpertId(submission.id, pendingExpertId ? String(pendingExpertId) : "");
-    refetchAssignableExperts();
+    void refreshExpertsCache();
   };
 
   async function handleReassignExpert(submission: any) {
@@ -313,7 +323,7 @@ export default function AdminDashboard() {
         delete next[submission.id];
         return next;
       });
-      await Promise.all([refetchSubmissions(), refetchStats(), refetchAudit(), refetchAssignableExperts()]);
+      await Promise.all([refetchSubmissions(), refetchStats(), refetchAudit(), refreshExpertsCache()]);
     } catch (err: any) {
       const message = err?.response?.data?.error || err?.message;
       toast({
@@ -397,6 +407,7 @@ export default function AdminDashboard() {
     return matchSearch && matchRole;
   });
   const expertUsers = (users ?? []).filter((user: any) => user.role === "reviewer" || user.role === "editor");
+  const assignableExpertsRefreshing = assignableExpertsLoading || assignableExpertsFetching;
   const expertRoleCount = ((stats as any)?.totalExperts ?? 0) || ((stats?.totalReviewers ?? 0) + (stats?.totalEditors ?? 0));
 
   const barData = [
@@ -671,10 +682,12 @@ export default function AdminDashboard() {
                                   value={getSelectedExpertId(submission.id)}
                                   onChange={(event) => setSelectedExpertId(submission.id, event.target.value)}
                                   className="h-9 bg-white text-sm"
-                                  disabled={assignableExpertsLoading || assignExpertMutation.isPending}
+                                  disabled={assignableExpertsRefreshing || assignExpertMutation.isPending}
                                 >
                                   <option value="">{t({ uz: "Ekspertni tanlang...", en: "Choose an expert...", ru: "Выберите эксперта..." })}</option>
-                                  {assignableExperts.map((expert) => (
+                                  {assignableExpertsRefreshing ? (
+                                    <option value="" disabled>{t({ uz: "Ekspertlar yangilanmoqda...", en: "Refreshing experts...", ru: "Обновление экспертов..." })}</option>
+                                  ) : assignableExperts.map((expert) => (
                                     <option key={expert.id} value={expert.id}>
                                       {expert.fullName} ({(expert.expertSpecialties || []).join(", ") || expert.scientificDegree || "Expert"})
                                     </option>
@@ -685,7 +698,7 @@ export default function AdminDashboard() {
                                     {t({ uz: "Faol ekspertlar ro'yxatini yuklab bo'lmadi.", en: "Could not load active experts.", ru: "Не удалось загрузить активных экспертов." })}
                                   </p>
                                 )}
-                                {!assignableExpertsLoading && !assignableExpertsError && assignableExperts.length === 0 && (
+                                {!assignableExpertsRefreshing && !assignableExpertsError && assignableExperts.length === 0 && (
                                   <p className="mt-2 text-xs text-amber-700">
                                     {t({ uz: "Faol ekspert topilmadi.", en: "No active experts found.", ru: "Активные эксперты не найдены." })}
                                   </p>
@@ -698,7 +711,7 @@ export default function AdminDashboard() {
                                     disabled={
                                       !getSelectedExpertId(submission.id) ||
                                       getSelectedExpertId(submission.id) === (submission.reviewSummary?.pendingExpertId ? String(submission.reviewSummary.pendingExpertId) : "") ||
-                                      assignableExpertsLoading ||
+                                      assignableExpertsRefreshing ||
                                       assignExpertMutation.isPending
                                     }
                                   >

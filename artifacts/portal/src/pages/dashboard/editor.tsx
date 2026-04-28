@@ -6,7 +6,7 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { useGetSubmissions, useAssignReviewer, useUpdateSubmissionStatus, useGetReviews } from "@workspace/api-client-react";
 import { Button, Card, Badge, PageTransition, Select, Textarea } from "@/components/ui/shared";
 import { STATUS_COLORS, formatDate, getLocalizedLiteratureType, getLocalizedStatusLabel, getLocalizedReviewVerdict } from "@/lib/utils";
-import { fetchExperts } from "@/lib/experts";
+import { EXPERTS_QUERY_KEY, fetchExperts } from "@/lib/experts";
 import { useToast } from "@/hooks/use-toast";
 import { useLocale } from "@/lib/i18n";
 
@@ -32,7 +32,13 @@ export default function EditorDashboard() {
   const basePath = currentPath.startsWith("/dashboard/publisher") ? "/dashboard/publisher" : "/dashboard/editor";
   const { data: submissionsData, refetch } = useGetSubmissions({ limit: 100 });
   const { data: reviews = [], refetch: refetchReviews } = useGetReviews();
-  const { data: experts = [], isLoading: expertsLoading, isError: expertsError, refetch: refetchExperts } = useQuery({ queryKey: ["experts", "assignable"], queryFn: fetchExperts });
+  const { data: experts = [], isLoading: expertsLoading, isFetching: expertsFetching, isError: expertsError, refetch: refetchExperts } = useQuery({
+    queryKey: EXPERTS_QUERY_KEY,
+    queryFn: fetchExperts,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
   const assignMutation = useAssignReviewer();
   const statusMutation = useUpdateSubmissionStatus();
   const { toast } = useToast();
@@ -43,6 +49,7 @@ export default function EditorDashboard() {
 
   const submissions = submissionsData?.items || [];
   const assignableExperts = experts;
+  const expertsRefreshing = expertsLoading || expertsFetching;
   const newSubmissions = submissions.filter((submission) => submission.status === "submitted");
   const underReview = submissions.filter((submission) => submission.status === "under_review");
   const finished = submissions.filter((submission) => ["accepted", "rejected", "revision_required", "published"].includes(submission.status));
@@ -215,10 +222,12 @@ export default function EditorDashboard() {
                                 value={getSelectedExpertId(submission.id)}
                                 onChange={(event) => setSelectedExpertId(submission.id, event.target.value)}
                                 className="mb-3 bg-white w-full border-slate-300"
-                                disabled={expertsLoading || assignMutation.isPending}
+                                disabled={expertsRefreshing || assignMutation.isPending}
                               >
                                 <option value="">{t({ uz: "Ekspertni tanlang...", en: "Choose an expert...", ru: "Выберите эксперта..." })}</option>
-                                {assignableExperts.map((expert) => (
+                                {expertsRefreshing ? (
+                                  <option value="" disabled>{t({ uz: "Ekspertlar yangilanmoqda...", en: "Refreshing experts...", ru: "Обновление экспертов..." })}</option>
+                                ) : assignableExperts.map((expert) => (
                                   <option key={expert.id} value={expert.id}>
                                     {expert.fullName} ({(expert.expertSpecialties || []).join(", ") || expert.scientificDegree || "Expert"})
                                   </option>
@@ -229,13 +238,13 @@ export default function EditorDashboard() {
                                   {t({ uz: "Ekspertlar ro'yxatini yuklab bo'lmadi.", en: "Could not load the experts list.", ru: "Не удалось загрузить список экспертов." })}
                                 </p>
                               )}
-                              {!expertsLoading && !expertsError && assignableExperts.length === 0 && (
+                              {!expertsRefreshing && !expertsError && assignableExperts.length === 0 && (
                                 <p className="text-xs text-amber-700 mb-3">
                                   {t({ uz: "Faol ekspert topilmadi. Avval Admin panelida ekspert qo'shing yoki faollashtiring.", en: "No active experts found. Add or activate an expert in the Admin panel first.", ru: "Активные эксперты не найдены. Сначала добавьте или активируйте эксперта в панели администратора." })}
                                 </p>
                               )}
                               <div className="flex gap-2">
-                                <Button size="sm" onClick={() => handleAssign(submission.id)} disabled={!getSelectedExpertId(submission.id) || expertsLoading || assignMutation.isPending} className="flex-1">
+                                <Button size="sm" onClick={() => handleAssign(submission.id)} disabled={!getSelectedExpertId(submission.id) || expertsRefreshing || assignMutation.isPending} className="flex-1">
                                   {assignMutation.isPending
                                     ? t({ uz: "Tayinlanmoqda...", en: "Assigning...", ru: "Назначение..." })
                                     : t({ uz: "Tasdiqlash", en: "Confirm", ru: "Подтвердить" })}

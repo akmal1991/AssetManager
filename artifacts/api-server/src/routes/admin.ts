@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { submissionsTable, usersTable, auditLogsTable, emailTemplatesTable, departmentsTable, reviewsTable } from "@workspace/db/schema";
-import { sql, eq, desc } from "drizzle-orm";
+import { submissionsTable, usersTable, auditLogsTable, emailTemplatesTable, departmentsTable, reviewsTable, documentsTable } from "@workspace/db/schema";
+import { sql, eq, desc, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { logAction } from "../lib/audit.js";
 import bcrypt from "bcryptjs";
 import * as XLSX from "xlsx";
+import fs from "fs";
 
 const router = Router();
 
@@ -15,6 +16,17 @@ function normalizeRole(role: unknown) {
 
 function roleDisplayName(role: string) {
   return ({ author: "Author", editor: "Expert", reviewer: "Expert", publisher: "Publisher", admin: "Administrator" } as Record<string, string>)[role] ?? role;
+}
+
+function safeUnlink(filePath: string | null | undefined) {
+  if (!filePath) return;
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error(`Failed to delete uploaded file while deleting user: ${filePath}`, error);
+  }
 }
 
 /* ── STATS ── */
@@ -124,18 +136,62 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
       res.status(400).json({ error: "O'zingizni o'chira olmaysiz" });
       return;
     }
-    const [deleted] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning();
-    if (!deleted) {
+
+    const target = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!target[0]) {
       res.status(404).json({ error: "Foydalanuvchi topilmadi" });
       return;
     }
+    if (target[0].role === "admin") {
+      const adminCount = await db.select({ count: sql<number>`count(*)` }).from(usersTable).where(eq(usersTable.role, "admin"));
+      if (Number(adminCount[0]?.count ?? 0) <= 1) {
+        res.status(400).json({ error: "Oxirgi administratorni o'chirib bo'lmaydi" });
+        return;
+      }
+    }
+
+    const authoredSubmissions = await db
+      .select({ id: submissionsTable.id })
+      .from(submissionsTable)
+      .where(eq(submissionsTable.authorId, id));
+    const authoredSubmissionIds = authoredSubmissions.map((submission) => submission.id);
+    const ownedDocuments = authoredSubmissionIds.length > 0
+      ? await db.select().from(documentsTable).where(inArray(documentsTable.submissionId, authoredSubmissionIds))
+      : [];
+
+    const deletedCounts = await db.transaction(async (tx) => {
+      const deletedDocuments = authoredSubmissionIds.length > 0
+        ? await tx.delete(documentsTable).where(inArray(documentsTable.submissionId, authoredSubmissionIds)).returning({ id: documentsTable.id })
+        : [];
+      const deletedSubmissionReviews = authoredSubmissionIds.length > 0
+        ? await tx.delete(reviewsTable).where(inArray(reviewsTable.submissionId, authoredSubmissionIds)).returning({ id: reviewsTable.id })
+        : [];
+      const deletedExpertReviews = await tx.delete(reviewsTable).where(eq(reviewsTable.reviewerId, id)).returning({ id: reviewsTable.id });
+      const deletedSubmissions = authoredSubmissionIds.length > 0
+        ? await tx.delete(submissionsTable).where(inArray(submissionsTable.id, authoredSubmissionIds)).returning({ id: submissionsTable.id })
+        : [];
+      const deletedUsers = await tx.delete(usersTable).where(eq(usersTable.id, id)).returning({ id: usersTable.id });
+
+      return {
+        documents: deletedDocuments.length,
+        reviews: deletedSubmissionReviews.length + deletedExpertReviews.length,
+        submissions: deletedSubmissions.length,
+        users: deletedUsers.length,
+      };
+    });
+
+    for (const document of ownedDocuments) {
+      safeUnlink(document.filePath);
+    }
+
     await logAction(req, "user_deleted", {
       entityType: "user", entityId: id,
-      detail: `User deleted: ${deleted.email}`,
+      detail: `User deleted: ${target[0].email} (${deletedCounts.submissions} submissions, ${deletedCounts.reviews} reviews, ${deletedCounts.documents} documents)`,
     });
-    res.json({ ok: true });
+    res.json({ ok: true, deleted: deletedCounts });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Failed to delete user", err);
+    res.status(500).json({ error: "Foydalanuvchini o'chirib bo'lmadi. Bog'liq yozuvlarni tekshiring." });
   }
 });
 

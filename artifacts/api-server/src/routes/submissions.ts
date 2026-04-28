@@ -366,7 +366,7 @@ router.post("/:id/assign", requireAuth, requireRole("editor", "publisher", "admi
       return;
     }
     const reviewer = await db.select().from(usersTable)
-      .where(and(eq(usersTable.id, numericReviewerId), eq(usersTable.role, "reviewer"), eq(usersTable.expertIsActive, true)))
+      .where(and(eq(usersTable.id, numericReviewerId), inArray(usersTable.role, ["reviewer", "editor"]), eq(usersTable.expertIsActive, true)))
       .limit(1);
     if (!reviewer[0]) {
       res.status(400).json({ error: "Active expert not found" });
