@@ -7,6 +7,7 @@ import { submissionsTable, documentsTable, reviewsTable, usersTable, departments
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { logAction } from "../lib/audit.js";
+import { parseRouteId, routeParamAsString } from "../lib/params.js";
 
 const router = Router();
 
@@ -16,7 +17,7 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const subId = req.params.id;
+    const subId = routeParamAsString(req.params.id);
     const now = new Date();
     const dir = path.join(UPLOAD_DIR, String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, "0"), subId);
     fs.mkdirSync(dir, { recursive: true });
@@ -32,6 +33,9 @@ const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 const VALID_STATUSES = new Set(["submitted", "under_review", "revision_required", "accepted", "rejected", "published"]);
 const VALID_DOC_TYPES = new Set(["internal_review", "external_review", "plagiarism_report", "curriculum", "syllabus", "main_document"]);
 const FINAL_STATUSES = new Set(["accepted", "rejected", "published"]);
+type SubmissionAccess =
+  | { submission: typeof submissionsTable.$inferSelect; error?: never }
+  | { error: { status: number; message: string }; submission?: never };
 
 function safeUnlink(filePath: string | null | undefined) {
   if (!filePath) return;
@@ -44,7 +48,7 @@ function safeUnlink(filePath: string | null | undefined) {
   }
 }
 
-async function ensureSubmissionAccess(req: any, submissionId: number) {
+async function ensureSubmissionAccess(req: any, submissionId: number): Promise<SubmissionAccess> {
   const user = req.user;
   const submission = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId)).limit(1);
   const current = submission[0];
@@ -61,7 +65,7 @@ async function ensureSubmissionAccess(req: any, submissionId: number) {
   return { submission: current };
 }
 
-async function ensureSubmissionViewAccess(req: any, submissionId: number) {
+async function ensureSubmissionViewAccess(req: any, submissionId: number): Promise<SubmissionAccess> {
   const user = req.user;
   const submission = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId)).limit(1);
   const current = submission[0];
@@ -86,7 +90,7 @@ async function ensureSubmissionViewAccess(req: any, submissionId: number) {
   return { error: { status: 403, message: "Forbidden" } };
 }
 
-async function ensureFileMutationAccess(req: any, submissionId: number) {
+async function ensureFileMutationAccess(req: any, submissionId: number): Promise<SubmissionAccess> {
   const user = req.user;
   const submission = await db.select().from(submissionsTable).where(eq(submissionsTable.id, submissionId)).limit(1);
   const current = submission[0];
@@ -285,10 +289,12 @@ router.post("/", requireAuth, async (req, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const access = await ensureSubmissionViewAccess(req as any, id);
     if ("error" in access) {
-      res.status(access.error.status).json({ error: access.error.message });
+      const error = access.error;
+      if (!error) return;
+      res.status(error.status).json({ error: error.message });
       return;
     }
     const row = await getSubmissionWithDetails(id);
@@ -316,7 +322,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 
 router.patch("/:id/status", requireAuth, requireRole("editor", "publisher", "admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const { status, notes } = req.body;
     if (!VALID_STATUSES.has(String(status))) {
       res.status(400).json({ error: "Invalid status" });
@@ -344,7 +350,7 @@ router.patch("/:id/status", requireAuth, requireRole("editor", "publisher", "adm
 
 router.post("/:id/assign", requireAuth, requireRole("editor", "publisher", "admin"), async (req, res) => {
   try {
-    const submissionId = parseInt(req.params.id);
+    const submissionId = parseRouteId(req.params.id);
     const body = req.body ?? {};
     const expertId = body.expertId ?? body.reviewerId;
     if (!expertId) {
@@ -448,7 +454,7 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
       res.status(400).json({ error: "No file uploaded" });
       return;
     }
-    const submissionId = parseInt(req.params.id);
+    const submissionId = parseRouteId(req.params.id);
     const { docType } = req.body;
     if (!docType) {
       safeUnlink(req.file.path);
@@ -463,7 +469,9 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
     const access = await ensureFileMutationAccess(req as any, submissionId);
     if ("error" in access) {
       safeUnlink(req.file.path);
-      res.status(access.error.status).json({ error: access.error.message });
+      const error = access.error;
+      if (!error) return;
+      res.status(error.status).json({ error: error.message });
       return;
     }
     const existing = await db.select().from(documentsTable)
@@ -493,12 +501,14 @@ router.post("/:id/upload", requireAuth, upload.single("file"), async (req, res) 
 
 router.get("/:id/documents/:documentId/download", requireAuth, async (req, res) => {
   try {
-    const submissionId = parseInt(req.params.id);
-    const documentId = parseInt(req.params.documentId);
+    const submissionId = parseRouteId(req.params.id);
+    const documentId = parseRouteId(req.params.documentId);
 
     const access = await ensureSubmissionViewAccess(req as any, submissionId);
     if ("error" in access) {
-      res.status(access.error.status).json({ error: access.error.message });
+      const error = access.error;
+      if (!error) return;
+      res.status(error.status).json({ error: error.message });
       return;
     }
 
@@ -525,12 +535,14 @@ router.get("/:id/documents/:documentId/download", requireAuth, async (req, res) 
 
 router.delete("/:id/documents/:documentId", requireAuth, async (req, res) => {
   try {
-    const submissionId = parseInt(req.params.id);
-    const documentId = parseInt(req.params.documentId);
+    const submissionId = parseRouteId(req.params.id);
+    const documentId = parseRouteId(req.params.documentId);
 
     const access = await ensureFileMutationAccess(req as any, submissionId);
     if ("error" in access) {
-      res.status(access.error.status).json({ error: access.error.message });
+      const error = access.error;
+      if (!error) return;
+      res.status(error.status).json({ error: error.message });
       return;
     }
 
@@ -556,11 +568,13 @@ router.delete("/:id/documents/:documentId", requireAuth, async (req, res) => {
 
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
-    const submissionId = parseInt(req.params.id);
+    const submissionId = parseRouteId(req.params.id);
 
     const access = await ensureSubmissionAccess(req as any, submissionId);
     if ("error" in access) {
-      res.status(access.error.status).json({ error: access.error.message });
+      const error = access.error;
+      if (!error) return;
+      res.status(error.status).json({ error: error.message });
       return;
     }
     const user = (req as any).user;

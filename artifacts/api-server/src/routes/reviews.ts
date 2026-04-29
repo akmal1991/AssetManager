@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { reviewsTable, submissionsTable, usersTable, documentsTable, departmentsTable } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
+import { parseRouteId } from "../lib/params.js";
 
 const router = Router();
 
@@ -23,6 +24,9 @@ function isAssignedExpertUser(user: { role: string; expertIsActive?: boolean | n
 }
 
 const VALID_VERDICTS = new Set(["accept", "minor_revision", "major_revision", "reject"]);
+type ExpertReviewAccess =
+  | { review: typeof reviewsTable.$inferSelect; error?: never }
+  | { error: { status: number; message: string }; review?: never };
 
 function scoreOrNull(value: unknown) {
   if (value == null || value === "") return null;
@@ -36,7 +40,7 @@ function scoreOrDefault(value: unknown, fallback: number) {
   return score ?? fallback;
 }
 
-function ensureEditableExpertReview(req: any, review: typeof reviewsTable.$inferSelect | undefined) {
+function ensureEditableExpertReview(req: any, review: typeof reviewsTable.$inferSelect | undefined): ExpertReviewAccess {
   if (!review) {
     return { error: { status: 404, message: "Expert conclusion not found" } };
   }
@@ -173,7 +177,7 @@ router.get("/", requireAuth, requireRole("reviewer", "publisher", "admin", "edit
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const user = (req as any).user;
     const rows = await db
       .select({
@@ -245,11 +249,13 @@ router.get("/:id", requireAuth, async (req, res) => {
 
 router.patch("/:id/draft", requireAuth, requireRole("reviewer", "editor"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const review = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id)).limit(1);
     const access = ensureEditableExpertReview(req as any, review[0]);
     if ("error" in access) {
-      res.status(access.error.status).json({ error: access.error.message });
+      const error = access.error;
+      if (!error) return;
+      res.status(error.status).json({ error: error.message });
       return;
     }
 
@@ -305,11 +311,13 @@ router.patch("/:id/draft", requireAuth, requireRole("reviewer", "editor"), async
 
 router.patch("/:id", requireAuth, requireRole("reviewer", "editor"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const review = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id)).limit(1);
     const access = ensureEditableExpertReview(req as any, review[0]);
     if ("error" in access) {
-      res.status(access.error.status).json({ error: access.error.message });
+      const error = access.error;
+      if (!error) return;
+      res.status(error.status).json({ error: error.message });
       return;
     }
     const {

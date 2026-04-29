@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { scientificDirectionsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
+import { parseRouteId } from "../lib/params.js";
 
 const router = Router();
 
@@ -31,7 +32,7 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
 
 router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     await db.delete(scientificDirectionsTable).where(eq(scientificDirectionsTable.id, id));
     res.json({ message: "Deleted" });
   } catch (err: any) {

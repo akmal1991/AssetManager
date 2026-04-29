@@ -4,11 +4,20 @@ import { usersTable, departmentsTable } from "@workspace/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { logAction } from "../lib/audit.js";
+import { parseRouteId } from "../lib/params.js";
 
 const router = Router();
 
-function normalizeRole(role: unknown) {
-  return role === "expert" ? "reviewer" : String(role ?? "");
+const ALLOWED_ROLES = ["author", "editor", "reviewer", "publisher", "admin"] as const;
+type UserRole = typeof ALLOWED_ROLES[number];
+
+function isUserRole(role: string): role is UserRole {
+  return (ALLOWED_ROLES as readonly string[]).includes(role);
+}
+
+function normalizeRole(role: unknown): UserRole | "" {
+  const normalized = role === "expert" ? "reviewer" : String(role ?? "");
+  return isUserRole(normalized) ? normalized : "";
 }
 
 function roleDisplayName(role: string) {
@@ -72,10 +81,9 @@ router.get("/experts", requireAuth, requireRole("admin", "editor", "publisher", 
 
 router.patch("/:id/role", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const role = normalizeRole(req.body?.role);
-    const allowedRoles = ["author", "editor", "reviewer", "publisher", "admin"];
-    if (!role || !allowedRoles.includes(role)) {
+    if (!role) {
       res.status(400).json({ error: "Valid role required" });
       return;
     }
@@ -116,7 +124,7 @@ router.patch("/:id/role", requireAuth, requireRole("admin"), async (req, res) =>
 
 router.patch("/:id/expert-profile", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const { expertOrganization, expertBio, expertSpecialties, expertIsActive } = req.body ?? {};
 
     const before = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);

@@ -4,14 +4,23 @@ import { submissionsTable, usersTable, auditLogsTable, emailTemplatesTable, depa
 import { sql, eq, desc, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { logAction } from "../lib/audit.js";
+import { parseRouteId } from "../lib/params.js";
 import bcrypt from "bcryptjs";
 import * as XLSX from "xlsx";
 import fs from "fs";
 
 const router = Router();
 
-function normalizeRole(role: unknown) {
-  return role === "expert" ? "reviewer" : String(role ?? "author");
+const ALLOWED_ROLES = ["author", "editor", "reviewer", "publisher", "admin"] as const;
+type UserRole = typeof ALLOWED_ROLES[number];
+
+function isUserRole(role: string): role is UserRole {
+  return (ALLOWED_ROLES as readonly string[]).includes(role);
+}
+
+function normalizeRole(role: unknown): UserRole | "" {
+  const normalized = role === "expert" ? "reviewer" : String(role ?? "author");
+  return isUserRole(normalized) ? normalized : "";
 }
 
 function roleDisplayName(role: string) {
@@ -86,7 +95,6 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
       expertIsActive,
     } = req.body ?? {};
     const role = normalizeRole(requestedRole);
-    const allowedRoles = ["author", "editor", "reviewer", "publisher", "admin"];
     if (!fullName || !email || !password) {
       res.status(400).json({ error: "fullName, email va password majburiy" });
       return;
@@ -96,7 +104,7 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
       res.status(409).json({ error: "Bu email allaqachon ro'yxatdan o'tgan" });
       return;
     }
-    if (!allowedRoles.includes(role)) {
+    if (!role) {
       res.status(400).json({ error: "Valid role required" });
       return;
     }
@@ -130,7 +138,7 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
 /* ── DELETE USER ── */
 router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const authUser = (req as any).user;
     if (authUser.id === id) {
       res.status(400).json({ error: "O'zingizni o'chira olmaysiz" });
@@ -198,7 +206,7 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
 /* ── RESET USER PASSWORD ── */
 router.patch("/users/:id/password", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const { password } = req.body;
     if (!password || password.length < 6) {
       res.status(400).json({ error: "Parol kamida 6 belgidan iborat bo'lishi kerak" });
@@ -254,7 +262,7 @@ router.get("/email-templates", requireAuth, requireRole("admin"), async (_req, r
 
 router.patch("/email-templates/:id", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseRouteId(req.params.id);
     const { subject, body, isActive } = req.body;
     const updated = await db
       .update(emailTemplatesTable)
@@ -402,21 +410,31 @@ router.get("/export/reviews", requireAuth, requireRole("admin", "editor", "publi
       .from(reviewsTable)
       .leftJoin(submissionsTable, eq(reviewsTable.submissionId, submissionsTable.id))
       .leftJoin(usersTable, eq(submissionsTable.authorId, usersTable.id))
-      .orderBy(desc(reviewsTable.createdAt));
+      .orderBy(desc(reviewsTable.assignedAt));
+
+    const REVIEW_TYPE_UZ: Record<string, string> = {
+      darslik: "Darslik",
+      oquv_qollanma: "O'quv qo'llanma",
+      monografiya: "Monografiya",
+      oquv_uslubiy_qollanma: "O'quv-uslubiy qo'llanma",
+      uslubiy_korsatma: "Uslubiy ko'rsatma",
+    };
+    const REVIEW_STATUS_UZ: Record<string, string> = { pending: "Kutilmoqda", submitted: "Yuborilgan" };
+    const VERDICT_UZ: Record<string, string> = {
+      accept: "Qabul qilish",
+      minor_revision: "Kichik tuzatish",
+      major_revision: "Qayta ishlash",
+      reject: "Rad etish",
+    };
+    const CLASSIFICATION_UZ: Record<string, string> = { positive: "Ijobiy", negative: "Salbiy" };
 
     const ws = XLSX.utils.json_to_sheet(
       rows.map(r => ({
         ...r,
-        "Ariza turi": {
-          darslik: "Darslik",
-          oquv_qollanma: "O'quv qo'llanma",
-          monografiya: "Monografiya",
-          oquv_uslubiy_qollanma: "O'quv-uslubiy qo'llanma",
-          uslubiy_korsatma: "Uslubiy ko'rsatma",
-        }[r["Ariza turi"] || ""] || r["Ariza turi"],
-        "Holat": { pending: "Kutilmoqda", submitted: "Yuborilgan" }[r["Holat"] || ""] || r["Holat"],
-        "Verdikt": { accept: "Qabul qilish", minor_revision: "Kichik tuzatish", major_revision: "Qayta ishlash", reject: "Rad etish" }[r["Verdikt"] || ""] || r["Verdikt"],
-        "Turkum": { positive: "Ijobiy", negative: "Salbiy" }[r["Turkum"] || ""] || r["Turkum"],
+        "Ariza turi": REVIEW_TYPE_UZ[r["Ariza turi"] || ""] || r["Ariza turi"],
+        "Holat": REVIEW_STATUS_UZ[r["Holat"] || ""] || r["Holat"],
+        "Verdikt": VERDICT_UZ[r["Verdikt"] || ""] || r["Verdikt"],
+        "Turkum": CLASSIFICATION_UZ[r["Turkum"] || ""] || r["Turkum"],
         "Yakunlangan sana": r["Yakunlangan sana"] ? new Date(r["Yakunlangan sana"]).toLocaleDateString("uz-UZ") : "",
         "Tayinlangan sana": r["Tayinlangan sana"] ? new Date(r["Tayinlangan sana"]).toLocaleDateString("uz-UZ") : "",
       }))

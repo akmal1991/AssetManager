@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { departmentsTable, scientificDirectionsTable } from "@workspace/db/schema";
+import { departmentsTable, submissionsTable, usersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
+import { parseRouteId } from "../lib/params.js";
 
 const router = Router();
 
@@ -31,11 +32,36 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
 
 router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    await db.delete(departmentsTable).where(eq(departmentsTable.id, id));
-    res.json({ message: "Deleted" });
+    const id = parseRouteId(req.params.id);
+    const existing = await db.select().from(departmentsTable).where(eq(departmentsTable.id, id)).limit(1);
+    if (!existing[0]) {
+      res.status(404).json({ error: "Department not found" });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const updatedUsers = await tx
+        .update(usersTable)
+        .set({ departmentId: null })
+        .where(eq(usersTable.departmentId, id))
+        .returning({ id: usersTable.id });
+      const updatedSubmissions = await tx
+        .update(submissionsTable)
+        .set({ departmentId: null, updatedAt: new Date() })
+        .where(eq(submissionsTable.departmentId, id))
+        .returning({ id: submissionsTable.id });
+      await tx.delete(departmentsTable).where(eq(departmentsTable.id, id));
+
+      return {
+        usersUpdated: updatedUsers.length,
+        submissionsUpdated: updatedSubmissions.length,
+      };
+    });
+
+    res.json({ message: "Deleted", ...result });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Failed to delete department", err);
+    res.status(500).json({ error: "Department could not be deleted" });
   }
 });
 
