@@ -224,12 +224,12 @@ function Router() {
 
       <Route path="/:locale/dashboard/expert">
         {(params) =>
-          isLocale(params.locale) ? <ProtectedRoute component={ExpertDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
+          isLocale(params.locale) ? <ProtectedRoute component={ExpertDashboard} allowedRoles={["reviewer", "editor"]} /> : <NotFound />
         }
       </Route>
       <Route path="/:locale/dashboard/expert/:tab">
         {(params) =>
-          isLocale(params.locale) ? <ProtectedRoute component={ExpertDashboard} allowedRoles={["reviewer"]} /> : <NotFound />
+          isLocale(params.locale) ? <ProtectedRoute component={ExpertDashboard} allowedRoles={["reviewer", "editor"]} /> : <NotFound />
         }
       </Route>
       <Route path="/:locale/reviews/:id">

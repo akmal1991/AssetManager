@@ -109,6 +109,7 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
       return;
     }
     const passwordHash = await bcrypt.hash(password, 10);
+    const isExpertRole = role === "reviewer" || role === "editor";
     const [user] = await db.insert(usersTable).values({
       fullName,
       email,
@@ -117,12 +118,12 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
       departmentId: departmentId || null,
       scientificDegree: scientificDegree || "none",
       position: position || "teacher",
-      expertOrganization: role === "reviewer" && expertOrganization ? String(expertOrganization).trim() : null,
-      expertBio: role === "reviewer" && expertBio ? String(expertBio).trim() : null,
-      expertSpecialties: role === "reviewer" && Array.isArray(expertSpecialties)
+      expertOrganization: isExpertRole && expertOrganization ? String(expertOrganization).trim() : null,
+      expertBio: isExpertRole && expertBio ? String(expertBio).trim() : null,
+      expertSpecialties: isExpertRole && Array.isArray(expertSpecialties)
         ? expertSpecialties.map((item) => String(item).trim()).filter(Boolean).slice(0, 20)
         : [],
-      expertIsActive: role === "reviewer" ? expertIsActive !== false : false,
+      expertIsActive: isExpertRole ? expertIsActive !== false : false,
     }).returning();
 
     await logAction(req, "user_registered", {

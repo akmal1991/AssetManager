@@ -7,7 +7,7 @@ import { submissionsTable, documentsTable, reviewsTable, usersTable, departments
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { logAction } from "../lib/audit.js";
-import { parseRouteId, routeParamAsString } from "../lib/params.js";
+import { parseRouteId } from "../lib/params.js";
 
 const router = Router();
 
@@ -17,7 +17,8 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const subId = routeParamAsString(req.params.id);
+    const parsedSubmissionId = parseRouteId(req.params.id);
+    const subId = parsedSubmissionId > 0 ? String(parsedSubmissionId) : "invalid";
     const now = new Date();
     const dir = path.join(UPLOAD_DIR, String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, "0"), subId);
     fs.mkdirSync(dir, { recursive: true });
@@ -141,7 +142,28 @@ function formatDocument(document: typeof documentsTable.$inferSelect) {
   };
 }
 
-function buildReviewSummary(reviews: Array<any>) {
+function sanitizeReviewForAuthor(review: any) {
+  const conclusionForm = review.conclusionForm && typeof review.conclusionForm === "object"
+    ? { ...review.conclusionForm }
+    : review.conclusionForm;
+  if (conclusionForm && typeof conclusionForm === "object") {
+    delete conclusionForm.expertFullName;
+    delete conclusionForm.expertDegree;
+    delete conclusionForm.workplace;
+    delete conclusionForm.signature;
+  }
+
+  return {
+    ...review,
+    reviewerId: null,
+    expertId: null,
+    reviewerName: null,
+    expertName: null,
+    conclusionForm,
+  };
+}
+
+function buildReviewSummary(reviews: Array<any>, options?: { redactExpertIdentity?: boolean }) {
   const pending = reviews.filter((review) => review.status === "pending");
   const submitted = reviews.filter((review) => review.status === "submitted");
   const latestPending = pending
@@ -157,11 +179,11 @@ function buildReviewSummary(reviews: Array<any>) {
     submittedCount: submitted.length,
     positiveCount: submitted.filter((review) => review.classification === "positive").length,
     negativeCount: submitted.filter((review) => review.classification === "negative").length,
-    assignedExpertNames: reviews.map((review) => review.reviewerName).filter(Boolean),
-    assignedExpertIds: reviews.map((review) => review.reviewerId).filter((id) => id != null),
+    assignedExpertNames: options?.redactExpertIdentity ? [] : reviews.map((review) => review.reviewerName).filter(Boolean),
+    assignedExpertIds: options?.redactExpertIdentity ? [] : reviews.map((review) => review.reviewerId).filter((id) => id != null),
     pendingReviewId: latestPending?.id ?? null,
-    pendingExpertId: latestPending?.reviewerId ?? null,
-    pendingExpertName: latestPending?.reviewerName ?? null,
+    pendingExpertId: options?.redactExpertIdentity ? null : latestPending?.reviewerId ?? null,
+    pendingExpertName: options?.redactExpertIdentity ? null : latestPending?.reviewerName ?? null,
     latestReviewId: latestSubmitted?.id ?? null,
     latestVerdict: latestSubmitted?.verdict ?? null,
     latestClassification: latestSubmitted?.classification ?? null,
@@ -224,7 +246,9 @@ router.get("/", requireAuth, async (req, res) => {
     res.json({
       items: items.map((item: any) => ({
         ...formatSub(item),
-        reviewSummary: buildReviewSummary(reviewMap.get(item.submission.id) ?? []),
+        reviewSummary: buildReviewSummary(reviewMap.get(item.submission.id) ?? [], {
+          redactExpertIdentity: user.role === "author",
+        }),
       })),
       total,
       page,
@@ -312,8 +336,14 @@ router.get("/:id", requireAuth, async (req, res) => {
     res.json({
       ...formatSub(row),
       documents: docs.map(formatDocument),
-      reviews: reviews.map(r => ({ ...r.review, expertId: r.review.reviewerId, expertName: r.reviewerName, reviewerName: r.reviewerName })),
-      reviewSummary: buildReviewSummary(reviews.map((review) => ({ ...review.review, reviewerName: review.reviewerName }))),
+      reviews: reviews.map((r) => {
+        const review = { ...r.review, expertId: r.review.reviewerId, expertName: r.reviewerName, reviewerName: r.reviewerName };
+        return (req as any).user.role === "author" ? sanitizeReviewForAuthor(review) : review;
+      }),
+      reviewSummary: buildReviewSummary(
+        reviews.map((review) => ({ ...review.review, reviewerName: review.reviewerName })),
+        { redactExpertIdentity: (req as any).user.role === "author" },
+      ),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

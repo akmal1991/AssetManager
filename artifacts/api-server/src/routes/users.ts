@@ -20,6 +20,13 @@ function normalizeRole(role: unknown): UserRole | "" {
   return isUserRole(normalized) ? normalized : "";
 }
 
+function matchesRoleFilter(role: string, filter: string | undefined) {
+  if (!filter) {
+    return true;
+  }
+  return filter === "expert" ? role === "reviewer" || role === "editor" : role === filter;
+}
+
 function roleDisplayName(role: string) {
   return ({ author: "Author", editor: "Expert", reviewer: "Expert", publisher: "Publisher", admin: "Administrator" } as Record<string, string>)[role] ?? role;
 }
@@ -54,7 +61,7 @@ router.get("/", requireAuth, requireRole("admin", "editor", "publisher"), async 
       .orderBy(usersTable.createdAt);
 
     const roleFilter = req.query.role as string | undefined;
-    const result = rows.filter(r => !roleFilter || r.user.role === roleFilter).map(mapUser);
+    const result = rows.filter(r => matchesRoleFilter(r.user.role, roleFilter)).map(mapUser);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

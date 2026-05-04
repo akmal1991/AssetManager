@@ -142,12 +142,6 @@ export default function AuthorDashboard() {
                               <ClipboardCheck className="h-4 w-4 text-primary" />
                               <span>{getReviewSummaryText(summary, locale)}</span>
                             </div>
-                            {(summary?.assignedExpertNames ?? []).length > 0 && (
-                              <p className="text-xs text-slate-500 pl-6">
-                                {t({ uz: "Ekspert", en: "Expert", ru: "Эксперт" })}:{" "}
-                                {(summary.assignedExpertNames as string[]).join(", ")}
-                              </p>
-                            )}
                             {summary?.latestClassification && (
                               <Badge className={summary.latestClassification === "positive" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-red-100 text-red-700 border-red-200"}>
                                 {summary.latestClassification === "positive"

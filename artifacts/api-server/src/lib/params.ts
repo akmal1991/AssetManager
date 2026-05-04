@@ -6,6 +6,10 @@ export function routeParamAsString(value: unknown): string {
 }
 
 export function parseRouteId(value: unknown): number {
-  const parsed = Number.parseInt(routeParamAsString(value), 10);
-  return Number.isInteger(parsed) ? parsed : NaN;
+  const raw = routeParamAsString(value).trim();
+  if (!/^[1-9]\d*$/.test(raw)) {
+    return -1;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(parsed) ? parsed : -1;
 }

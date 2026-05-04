@@ -6,7 +6,9 @@ import {
   auditLogsTable,
   departmentsTable,
   emailTemplatesTable,
+  reviewsTable,
   scientificDirectionsTable,
+  submissionsTable,
   usersTable,
 } from "./schema";
 import {
@@ -37,6 +39,32 @@ async function ensureSchemaCompatibility() {
     UPDATE users
     SET expert_is_active = true
     WHERE role = 'reviewer' AND expert_is_active = false
+  `);
+
+  await db.execute(sql`
+    WITH latest_submitted_reviews AS (
+      SELECT DISTINCT ON (${reviewsTable.submissionId})
+        ${reviewsTable.submissionId} AS submission_id,
+        ${reviewsTable.verdict} AS verdict,
+        ${reviewsTable.classification} AS classification,
+        ${reviewsTable.submittedAt} AS submitted_at,
+        ${reviewsTable.id} AS review_id
+      FROM ${reviewsTable}
+      WHERE ${reviewsTable.status} = 'submitted'
+      ORDER BY ${reviewsTable.submissionId}, ${reviewsTable.submittedAt} DESC NULLS LAST, ${reviewsTable.id} DESC
+    )
+    UPDATE ${submissionsTable}
+    SET
+      status = CASE
+        WHEN latest_submitted_reviews.classification = 'positive'
+          OR latest_submitted_reviews.verdict IN ('accept', 'minor_revision') THEN 'accepted'
+        WHEN latest_submitted_reviews.verdict = 'major_revision' THEN 'revision_required'
+        ELSE 'rejected'
+      END,
+      updated_at = COALESCE(latest_submitted_reviews.submitted_at, now())
+    FROM latest_submitted_reviews
+    WHERE ${submissionsTable.id} = latest_submitted_reviews.submission_id
+      AND ${submissionsTable.status} IN ('submitted', 'under_review', 'revision_required')
   `);
 }
 

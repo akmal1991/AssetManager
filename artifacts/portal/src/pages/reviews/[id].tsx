@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Save, Send, FileText, User, ClipboardCheck, Paperclip, Mail, Phone, Building2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Save, Send, FileText, User, ClipboardCheck, Paperclip, Mail, Phone, Building2, Printer } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button, Card, Textarea, PageTransition, LoadingSpinner, Input, Badge } from "@/components/ui/shared";
-import { useGetReview, useSubmitReview } from "@workspace/api-client-react";
+import { getGetReviewQueryKey, getGetReviewsQueryKey, getGetSubmissionsQueryKey, useGetReview, useSubmitReview } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getLocalizedLiteratureType, getLocalizedReviewVerdict } from "@/lib/utils";
@@ -108,6 +109,17 @@ const copy = {
   submit: { uz: "Ekspert xulosasini yuborish", en: "Submit expert conclusion", ru: "Отправить экспертное заключение" },
   saveDraft: { uz: "Qoralamani saqlash", en: "Save draft", ru: "Сохранить черновик" },
   sectionScores: { uz: "Baholash ballari", en: "Evaluation scores", ru: "Оценочные баллы" },
+  print: { uz: "Chop etish / PDF saqlash", en: "Print / Save PDF", ru: "Печать / сохранить PDF" },
+  printHint: {
+    uz: "Yakuniy ekspert xulosasini chop etish yoki brauzer oynasi orqali PDF sifatida saqlash mumkin.",
+    en: "Print the final expert conclusion or save it as a PDF from the browser dialog.",
+    ru: "Распечатайте итоговое экспертное заключение или сохраните его как PDF через окно браузера.",
+  },
+  authorPrivacyNotice: {
+    uz: "Muallif ko'rinishida ekspert shaxsi maxfiy saqlanadi.",
+    en: "In the author view, expert identity is kept confidential.",
+    ru: "В режиме автора личность эксперта скрыта.",
+  },
 } as const;
 
 const fieldLabels = {
@@ -210,7 +222,7 @@ function RadioGroup({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card className="p-6 border border-border shadow-sm bg-white">
+    <Card className="p-6 border border-border shadow-sm bg-white print-avoid-break">
       <h3 className="text-lg font-bold font-serif mb-5 text-slate-900 border-b border-slate-100 pb-3">{title}</h3>
       {children}
     </Card>
@@ -219,6 +231,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function ReviewForm() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const { locale, t, withLocale, stripLocale, location } = useLocale();
   const { user } = useAuth();
@@ -319,6 +332,10 @@ export default function ReviewForm() {
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.finalRecommendation || !form.purposeRelevance || !form.finalNote || !validateScores()) {
@@ -341,6 +358,11 @@ export default function ReviewForm() {
           ...getPayload(),
         } as any,
       });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetReviewQueryKey(reviewId) }),
+        queryClient.invalidateQueries({ queryKey: getGetReviewsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetSubmissionsQueryKey() }),
+      ]);
       toast({
         title: t({ uz: "Muvaffaqiyatli", en: "Success", ru: "Успешно" }),
         description: t({ uz: "Ekspert xulosasi yuborildi", en: "Expert conclusion submitted", ru: "Экспертное заключение отправлено" }),
@@ -377,9 +399,10 @@ export default function ReviewForm() {
     return <DashboardLayout><LoadingSpinner /></DashboardLayout>;
   }
 
-  const isExpertOwner = user?.role === "reviewer" && reviewData.reviewerId === user.id;
+  const isExpertOwner = (user?.role === "reviewer" || user?.role === "editor") && reviewData.reviewerId === user.id;
   const isReadOnly = reviewData.status === "submitted" || !isExpertOwner;
   const currentRole = user?.role as string | undefined;
+  const isAuthorViewer = currentRole === "author";
   const backPath = currentRole === "author" ? "/dashboard/author" : currentRole === "publisher" ? "/dashboard/publisher" : "/dashboard/expert";
   const submission = reviewData.submission;
   const author = submission?.author;
@@ -388,13 +411,54 @@ export default function ReviewForm() {
   return (
     <DashboardLayout>
       <PageTransition>
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden !important;
+            }
+
+            #expert-conclusion-print-area,
+            #expert-conclusion-print-area * {
+              visibility: visible !important;
+            }
+
+            #expert-conclusion-print-area {
+              position: absolute !important;
+              inset: 0 auto auto 0 !important;
+              width: 100% !important;
+              max-width: none !important;
+              padding: 0 !important;
+              background: white !important;
+              color: #0f172a !important;
+            }
+
+            .no-print {
+              display: none !important;
+            }
+
+            .print-avoid-break {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+
+            input,
+            textarea {
+              color: #0f172a !important;
+              -webkit-text-fill-color: #0f172a !important;
+              background: transparent !important;
+              border-color: #cbd5e1 !important;
+              box-shadow: none !important;
+            }
+          }
+        `}</style>
         <div className="max-w-5xl mx-auto py-6">
-          <Link href={withLocale(backPath)} className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary mb-6 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+          <Link href={withLocale(backPath)} className="no-print inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary mb-6 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
             {t({ uz: "Ortga qaytish", en: "Back", ru: "Назад" })}
           </Link>
 
-          <div className="mb-6 rounded-3xl bg-white border border-border shadow-sm p-8 text-center">
+          <div id="expert-conclusion-print-area">
+          <div className="mb-6 rounded-3xl bg-white border border-border shadow-sm p-8 text-center print-avoid-break">
             <p className="text-xs uppercase tracking-[0.22em] text-slate-500 mb-3">
               {t({ uz: "Universitet Nashriyot Portali", en: "University Publishing Portal", ru: "Университетский издательский портал" })}
             </p>
@@ -411,7 +475,7 @@ export default function ReviewForm() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-6 mb-6">
+          <div className="no-print grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-6 mb-6">
             <Card className="p-6 border border-border shadow-sm bg-white">
               <div className="flex items-center gap-2 mb-4">
                 <User className="h-5 w-5 text-primary" />
@@ -595,22 +659,26 @@ export default function ReviewForm() {
             <Section title={l(copy.section11, locale)}>
               <RadioGroup name="finalRecommendation" value={form.finalRecommendation} group="finalRecommendation" locale={locale} disabled={isReadOnly} onChange={(value) => update("finalRecommendation", value)} />
               <Textarea value={form.finalNote} onChange={(event) => update("finalNote", event.target.value)} disabled={isReadOnly} className="mt-4 min-h-[120px]" placeholder={l(copy.note, locale)} />
-              <Textarea value={form.confidentialEditorNote} onChange={(event) => update("confidentialEditorNote", event.target.value)} disabled={isReadOnly} className="mt-4 bg-amber-50/50 border-amber-200" placeholder={l(copy.confidential, locale)} />
+              {!isAuthorViewer && (
+                <Textarea value={form.confidentialEditorNote} onChange={(event) => update("confidentialEditorNote", event.target.value)} disabled={isReadOnly} className="mt-4 bg-amber-50/50 border-amber-200" placeholder={l(copy.confidential, locale)} />
+              )}
             </Section>
 
-            <Section title={l(copy.section12, locale)}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(["expertFullName", "expertDegree", "workplace", "signature", "signedDate"] as const).map((key) => (
-                  <div key={key}>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{l(fieldLabels[key], locale)}</label>
-                    <Input type={key === "signedDate" ? "date" : "text"} value={form[key]} onChange={(event) => update(key, event.target.value)} disabled={isReadOnly} />
-                  </div>
-                ))}
-              </div>
-            </Section>
+            {!isAuthorViewer && (
+              <Section title={l(copy.section12, locale)}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(["expertFullName", "expertDegree", "workplace", "signature", "signedDate"] as const).map((key) => (
+                    <div key={key}>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">{l(fieldLabels[key], locale)}</label>
+                      <Input type={key === "signedDate" ? "date" : "text"} value={form[key]} onChange={(event) => update(key, event.target.value)} disabled={isReadOnly} />
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
 
             {!isReadOnly && (
-              <div className="flex flex-col sm:flex-row justify-end gap-3 sticky bottom-6 z-10">
+              <div className="no-print flex flex-col sm:flex-row justify-end gap-3 sticky bottom-6 z-10">
                 <Button type="button" size="lg" variant="outline" className="shadow-lg bg-white text-lg px-8 h-14" onClick={handleSaveDraft} disabled={submitMutation.isPending}>
                   <Save className="mr-3 h-5 w-5" />
                   {l(copy.saveDraft, locale)}
@@ -622,6 +690,25 @@ export default function ReviewForm() {
               </div>
             )}
           </form>
+          </div>
+
+          {reviewData.status === "submitted" && (
+            <Card className="no-print mt-6 p-6 border border-emerald-100 bg-emerald-50/60 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold font-serif text-slate-900 mb-1">{l(copy.print, locale)}</h3>
+                  <p className="text-sm text-slate-600">{l(copy.printHint, locale)}</p>
+                  {isAuthorViewer && (
+                    <p className="text-xs text-slate-500 mt-2">{l(copy.authorPrivacyNotice, locale)}</p>
+                  )}
+                </div>
+                <Button type="button" size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={handlePrint}>
+                  <Printer className="mr-2 h-5 w-5" />
+                  {l(copy.print, locale)}
+                </Button>
+              </div>
+            </Card>
+          )}
         </div>
       </PageTransition>
     </DashboardLayout>

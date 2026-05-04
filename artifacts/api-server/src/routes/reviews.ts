@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { reviewsTable, submissionsTable, usersTable, documentsTable, departmentsTable } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { parseRouteId } from "../lib/params.js";
 
@@ -10,6 +10,16 @@ const router = Router();
 function classifyVerdict(verdict?: string | null) {
   if (!verdict) return null;
   return verdict === "accept" || verdict === "minor_revision" ? "positive" : "negative";
+}
+
+function submissionStatusFromVerdict(verdict: string) {
+  if (verdict === "accept" || verdict === "minor_revision") {
+    return "accepted";
+  }
+  if (verdict === "major_revision") {
+    return "revision_required";
+  }
+  return "rejected";
 }
 
 function verdictFromTemplateRecommendation(recommendation?: string | null) {
@@ -35,11 +45,6 @@ function scoreOrNull(value: unknown) {
   return score;
 }
 
-function scoreOrDefault(value: unknown, fallback: number) {
-  const score = scoreOrNull(value);
-  return score ?? fallback;
-}
-
 function ensureEditableExpertReview(req: any, review: typeof reviewsTable.$inferSelect | undefined): ExpertReviewAccess {
   if (!review) {
     return { error: { status: 404, message: "Expert conclusion not found" } };
@@ -60,13 +65,36 @@ function formatDocument(document: typeof documentsTable.$inferSelect) {
   };
 }
 
-function mapReviewRow(row: any, details?: { author?: any; documents?: Array<any>; departmentName?: string | null }) {
+function redactExpertIdentityFromReview(review: any) {
+  const conclusionForm = review.conclusionForm && typeof review.conclusionForm === "object"
+    ? { ...review.conclusionForm }
+    : review.conclusionForm;
+  if (conclusionForm && typeof conclusionForm === "object") {
+    delete conclusionForm.expertFullName;
+    delete conclusionForm.expertDegree;
+    delete conclusionForm.workplace;
+    delete conclusionForm.signature;
+  }
+
   return {
-    ...row.review,
+    ...review,
+    reviewerId: null,
+    conclusionForm,
+  };
+}
+
+function mapReviewRow(
+  row: any,
+  details?: { author?: any; documents?: Array<any>; departmentName?: string | null; redactExpertIdentity?: boolean },
+) {
+  const review = details?.redactExpertIdentity ? redactExpertIdentityFromReview(row.review) : row.review;
+  const expertName = details?.redactExpertIdentity ? null : row.reviewerName;
+  return {
+    ...review,
     submissionTitle: row.submissionTitle,
-    expertId: row.review.reviewerId,
-    expertName: row.reviewerName,
-    reviewerName: row.reviewerName,
+    expertId: details?.redactExpertIdentity ? null : row.review.reviewerId,
+    expertName,
+    reviewerName: expertName,
     submission: row.submissionId == null ? null : {
       id: row.submissionId,
       title: row.submissionTitle,
@@ -240,6 +268,7 @@ router.get("/:id", requireAuth, async (req, res) => {
         author: author[0] ?? null,
         departmentName: department[0]?.name ?? null,
         documents: documents.map(formatDocument),
+        redactExpertIdentity: user.role === "author",
       },
     ));
   } catch (err: any) {
@@ -348,31 +377,53 @@ router.patch("/:id", requireAuth, requireRole("reviewer", "editor"), async (req,
       return;
     }
     const normalizedScores = {
-      scientificSignificance: scoreOrDefault(scientificSignificance, 8),
-      methodology: scoreOrDefault(methodology, 8),
-      structureClarity: scoreOrDefault(structureClarity, 8),
-      originality: scoreOrDefault(originality, 8),
+      scientificSignificance: scoreOrNull(scientificSignificance),
+      methodology: scoreOrNull(methodology),
+      structureClarity: scoreOrNull(structureClarity),
+      originality: scoreOrNull(originality),
     };
+    if (Object.values(normalizedScores).some((score) => score == null)) {
+      res.status(400).json({ error: "Scores must be integers from 1 to 10" });
+      return;
+    }
     const classification = classifyVerdict(finalVerdict);
-    await db.update(reviewsTable).set({
-      scientificSignificance: normalizedScores.scientificSignificance,
-      methodology: normalizedScores.methodology,
-      structureClarity: normalizedScores.structureClarity,
-      originality: normalizedScores.originality,
-      conclusionSummary: String(summary).trim(),
-      conclusionForm: conclusionForm && typeof conclusionForm === "object" ? conclusionForm : {},
-      strengths: strengths == null ? null : String(strengths).trim() || null,
-      weaknesses: weaknesses == null ? null : String(weaknesses).trim() || null,
-      recommendation: String(officialRecommendation).trim(),
-      commentsForAuthor: commentsForAuthor ?? null,
-      commentsForEditor: commentsForEditor ?? null,
-      verdict: finalVerdict,
-      classification,
-      status: "submitted",
-      submittedAt: new Date(),
-    }).where(eq(reviewsTable.id, id));
-    const updated = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id)).limit(1);
-    res.json(updated[0]);
+    const nextSubmissionStatus = submissionStatusFromVerdict(finalVerdict);
+    const submittedAt = new Date();
+    const updated = await db.transaction(async (tx) => {
+      const reviewRows = await tx.update(reviewsTable).set({
+        scientificSignificance: normalizedScores.scientificSignificance,
+        methodology: normalizedScores.methodology,
+        structureClarity: normalizedScores.structureClarity,
+        originality: normalizedScores.originality,
+        conclusionSummary: String(summary).trim(),
+        conclusionForm: conclusionForm && typeof conclusionForm === "object" ? conclusionForm : {},
+        strengths: strengths == null ? null : String(strengths).trim() || null,
+        weaknesses: weaknesses == null ? null : String(weaknesses).trim() || null,
+        recommendation: String(officialRecommendation).trim(),
+        commentsForAuthor: commentsForAuthor ?? null,
+        commentsForEditor: commentsForEditor ?? null,
+        verdict: finalVerdict,
+        classification,
+        status: "submitted",
+        submittedAt,
+      }).where(eq(reviewsTable.id, id)).returning();
+
+      const updatedReview = reviewRows[0];
+      if (!updatedReview) {
+        return undefined;
+      }
+
+      await tx.update(submissionsTable)
+        .set({ status: nextSubmissionStatus, updatedAt: submittedAt })
+        .where(and(
+          eq(submissionsTable.id, updatedReview.submissionId),
+          inArray(submissionsTable.status, ["submitted", "under_review", "revision_required"]),
+        ));
+
+      return updatedReview;
+    });
+
+    res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
